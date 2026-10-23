@@ -1,0 +1,200 @@
+import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
+import St from 'gi://St';
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import {eligible, materialStyle} from './materials.js';
+
+import {VisualBackdrop} from './backdrop.js';
+import {clientSurfaceRoot} from './windowSurface.js';
+import {FrostEffect} from './frostEffect.js';
+import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
+import {ShellSurfaces} from './shellSurfaces.js';
+
+export default class Prism extends Extension {
+    enable() {
+        this._settings = this.getSettings();
+        this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+        this._connections = [];
+        this._windows = new Map();
+        this._tracker = Shell.WindowTracker.get_default();
+        this._gtkMenus = new GtkMenuStyle();
+        this._gtkCss = undefined;
+        this._button = new PanelMenu.Button(0.0, 'Prism Materials');
+        this._button.add_child(new St.Icon({icon_name: 'weather-fog-symbolic', style_class: 'system-status-icon'}));
+        this._toggle = new PopupMenu.PopupSwitchMenuItem('Window materials', this._settings.get_boolean('enabled'));
+        this._toggle.connect('toggled', (_item, state) => this._settings.set_boolean('enabled', state));
+        this._button.menu.addMenuItem(this._toggle);
+        this._button.menu.addAction('Toggle for focused app', () => this._toggleApp());
+        this._button.menu.addAction('Material settings', async () => {
+            try { await this.openPreferences(); }
+            catch (error) { console.error('Prism: could not open preferences', error); }
+        });
+        Main.panel.addToStatusArea(this.uuid, this._button);
+        this._connect(this._settings, 'changed', () => {
+            this._toggle.setToggleState(this._settings.get_boolean('enabled'));
+            this._syncGtkMenus();
+            this._refresh();
+        });
+        this._connect(this._interface, 'changed::color-scheme', () => { this._syncGtkMenus(); this._refresh(); });
+        this._connect(global.display, 'notify::focus-window', () => this._refresh(false));
+        this._connect(global.window_manager, 'map', (_wm, actor) => this._watch(actor));
+        this._connect(Main.overview, 'showing', () => this._refresh());
+        this._connect(Main.overview, 'hidden', () => this._refresh());
+        this._connect(Main.sessionMode, 'updated', () => this._refresh());
+        this._shellSurfaces = new ShellSurfaces(Main.uiGroup, Main.panel, this._settings,
+            () => this._dark(), () => this._settings.get_boolean('enabled') &&
+                !this._settings.get_boolean('reduce-transparency') && !Main.sessionMode.isLocked);
+        for (const actor of global.get_window_actors())
+            this._watch(actor);
+        this._syncGtkMenus();
+    }
+
+    _connect(object, signal, handler) {
+        this._connections.push([object, object.connect(signal, handler)]);
+    }
+
+    _toggleApp() {
+        const window = global.display.focus_window;
+        const id = window && this._tracker.get_window_app(window)?.get_id();
+        if (!id) return;
+        const apps = this._settings.get_strv('applications');
+        this._settings.set_strv('applications', apps.includes(id) ? apps.filter(app => app !== id) : [...apps, id]);
+    }
+
+    _watch(actor) {
+        if (this._windows.has(actor)) return;
+        const window = actor.meta_window;
+        if (!window) return;
+        const state = {window, layer: null, surface: null, opacity: null, signals: []};
+        this._windows.set(actor, state);
+        for (const signal of ['size-changed', 'position-changed', 'notify::fullscreen', 'notify::minimized'])
+            state.signals.push([window, window.connect(signal, () => this._update(actor, state))]);
+        state.signals.push([actor, actor.connect('destroy', () => {
+            this._clear(state);
+            for (const [object, id] of state.signals) object.disconnect(id);
+            this._windows.delete(actor);
+        })]);
+        this._update(actor, state);
+    }
+
+    _dark() {
+        const appearance = this._settings.get_string('appearance');
+        return appearance === 'dark' || (appearance === 'auto' && this._interface.get_string('color-scheme') === 'prefer-dark');
+    }
+
+    _syncGtkMenus(disabling = false) {
+        try {
+            const active = !disabling && this._settings.get_boolean('gtk-menus') &&
+                this._settings.get_boolean('enabled') && !this._settings.get_boolean('reduce-transparency');
+            const css = active ? gtkMenuCss(this._dark(), this._settings.get_int('shell-opacity')) : null;
+            if (!disabling && this._gtkCss === css) return;
+            this._gtkMenus?.apply(css);
+            this._gtkCss = css;
+        } catch (error) {
+            console.error('Prism: GTK menu styling could not be updated', error);
+        }
+    }
+
+    _refresh(shell = true) {
+        if (shell) this._shellSurfaces?.refresh();
+        for (const [actor, state] of this._windows) this._update(actor, state);
+    }
+
+    _update(actor, state) {
+        const s = this._settings;
+        const w = state.window;
+        const app = this._tracker.get_window_app(w)?.get_id();
+        const type = w.get_window_type();
+        const isPopup = [Meta.WindowType.MENU, Meta.WindowType.DROPDOWN_MENU, Meta.WindowType.POPUP_MENU,
+            Meta.WindowType.TOOLTIP, Meta.WindowType.COMBO].includes(type);
+        const isDialog = [Meta.WindowType.DIALOG, Meta.WindowType.MODAL_DIALOG,
+            Meta.WindowType.UTILITY, Meta.WindowType.TOOLBAR].includes(type);
+        const parent = w.get_transient_for?.();
+        const ownerApp = app ?? (parent && this._tracker.get_window_app(parent)?.get_id());
+        const sidebarMode = !isPopup && s.get_boolean('sidebar-materials');
+        const active = s.get_boolean('enabled') && !s.get_boolean('reduce-transparency') &&
+            !Main.overview.visible && !Main.sessionMode.isLocked && eligible({
+                normal: type === Meta.WindowType.NORMAL || (isPopup && s.get_boolean('window-popups')) ||
+                    (isDialog && s.get_boolean('window-dialogs')),
+                fullscreen: w.is_fullscreen(), minimized: w.minimized,
+                focused: global.display.focus_window === w || global.display.focus_window === parent,
+                focusOnly: s.get_boolean('focused-only'),
+                app: ownerApp,
+                allApplications: s.get_boolean('all-applications'),
+                applications: s.get_strv('applications'),
+            });
+        if (!active) { this._clear(state); return; }
+        if (!state.surface) {
+            state.surface = clientSurfaceRoot(actor.get_children(), child =>
+                GObject.type_name_from_instance(child));
+            if (!state.surface) return;
+            state.opacity = state.surface.opacity;
+        }
+        const roundedFrost = s.get_boolean('preserve-corners') && s.get_boolean('rounded-frost');
+        const mode = roundedFrost ? 'frost' : 'blur';
+        if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
+        if (s.get_boolean('preserve-corners') && !roundedFrost) {
+            // Meta.WindowActor doesn't expose the client's alpha silhouette.
+            // Keep native client corners instead of inserting a square backdrop.
+            state.layer?.destroy();
+            state.layer = null;
+            state.effect = null;
+        } else {
+            if (!state.layer) {
+                state.layer = new VisualBackdrop({reactive: false, can_focus: false, track_hover: false, clip_to_allocation: roundedFrost});
+                state.effect = roundedFrost ? new FrostEffect() : new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND});
+                state.effectMode = mode;
+                state.layerStyle = null;
+                state.layer.add_effect(state.effect);
+                actor.insert_child_at_index(state.layer, 0);
+            }
+            const frame = w.get_frame_rect();
+            const buffer = w.get_buffer_rect();
+            state.layer.set_position(frame.x - buffer.x, frame.y - buffer.y);
+            state.layer.set_size(frame.width, frame.height);
+            const dark = this._dark();
+            const radius = Math.max(0, Math.min(48, s.get_int('window-radius')));
+            if (roundedFrost) state.effect.radii = [radius, radius, radius, radius];
+            const style = materialStyle(s.get_string('preset'), dark) + (roundedFrost ? ` border-radius: ${radius}px;` : '');
+            if (state.layerStyle !== style) { state.layer.set_style(style); state.layerStyle = style; }
+            state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
+            state.effect.brightness = dark ? 0.85 : 1.0;
+        }
+        state.surface.opacity = !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
+            ? Math.round(state.opacity * Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency'))) / 100)
+            : state.opacity;
+    }
+
+    _clear(state) {
+        if (state.surface) state.surface.opacity = state.opacity;
+        state.layer?.destroy();
+        state.layer = null;
+        state.surface = null;
+        state.effect = null;
+    }
+
+    disable() {
+        this._syncGtkMenus(true);
+        this._gtkMenus = null;
+        this._shellSurfaces?.destroy();
+        this._shellSurfaces = null;
+        for (const [object, id] of this._connections) object.disconnect(id);
+        for (const state of this._windows.values()) {
+            this._clear(state);
+            for (const [object, id] of state.signals) object.disconnect(id);
+        }
+        this._windows.clear();
+        this._button.destroy();
+        this._button = null;
+        this._settings = null;
+        this._interface = null;
+        this._tracker = null;
+        this._windows = null;
+        this._connections = null;
+    }
+}

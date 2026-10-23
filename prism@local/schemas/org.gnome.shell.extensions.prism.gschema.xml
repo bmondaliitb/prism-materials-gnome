@@ -1,0 +1,28 @@
+<schemalist>
+ <schema id="org.gnome.shell.extensions.prism" path="/org/gnome/shell/extensions/prism/">
+  <key name="enabled" type="b"><default>true</default></key>
+  <key name="preset" type="s"><default>'frosted'</default></key>
+  <key name="appearance" type="s"><default>'auto'</default></key>
+  <key name="blur-radius" type="i"><default>36</default></key>
+  <key name="translucency" type="i"><default>92</default></key>
+  <key name="force-translucency" type="b"><default>false</default></key>
+  <key name="focused-only" type="b"><default>true</default></key>
+  <key name="reduce-transparency" type="b"><default>false</default></key>
+  <key name="applications" type="as"><default>[]</default></key>
+  <key name="sidebar-materials" type="b"><default>true</default></key>
+  <key name="all-applications" type="b"><default>false</default></key>
+  <key name="window-popups" type="b"><default>false</default></key>
+  <key name="window-dialogs" type="b"><default>false</default></key>
+  <key name="shell-menus" type="b"><default>false</default></key>
+  <key name="shell-panel" type="b"><default>false</default></key>
+  <key name="shell-dock" type="b"><default>false</default></key>
+  <key name="shell-dialogs" type="b"><default>false</default></key>
+  <key name="shell-opacity" type="i"><default>85</default></key>
+  <key name="popup-opacity" type="i"><default>92</default></key>
+  <key name="shell-notifications" type="b"><default>false</default></key>
+  <key name="preserve-corners" type="b"><default>true</default></key>
+  <key name="gtk-menus" type="b"><default>false</default></key>
+  <key name="rounded-frost" type="b"><default>true</default></key>
+  <key name="window-radius" type="i"><default>12</default></key>
+ </schema>
+</schemalist>

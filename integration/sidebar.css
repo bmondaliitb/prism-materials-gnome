@@ -1,0 +1,28 @@
+/* These classes are added only by the opt-in launcher adapter. */
+.prism-window {
+  background-color: transparent;
+}
+.prism-window .prism-sidebar-host,
+.prism-window .prism-underlay {
+  background: transparent;
+}
+.prism-window .prism-sidebar {
+  background-color: color-mix(in srgb, var(--sidebar-bg-color) 28%, transparent);
+  --headerbar-bg-color: transparent;
+  --headerbar-backdrop-color: transparent;
+}
+.prism-window .prism-sidebar .view,
+.prism-window .prism-sidebar listview,
+.prism-window .prism-sidebar gridview,
+.prism-window .prism-sidebar list {
+  background-color: transparent;
+}
+/* This is the actual content widget, not a rectangle guessed by the compositor. */
+.prism-window .prism-content {
+  background-color: var(--window-bg-color);
+}
+/* Preserve native page painting, selection states, and foreground alpha. */
+@media (prefers-contrast: more) {
+  .prism-window { background-color: var(--window-bg-color); }
+  .prism-window .prism-sidebar { background-color: var(--sidebar-bg-color); }
+}

@@ -1,0 +1,10 @@
+{
+  "uuid": "prism@local",
+  "name": "Prism Materials",
+  "description": "Soft, layered window materials with per-application control.",
+  "shell-version": [
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.prism",
+  "version": 13
+}

@@ -1,0 +1,77 @@
+import Cogl from 'gi://Cogl';
+
+// Blur only a bounded, reduced-resolution image. Full-resolution compositing
+// stays a single sample, so adding a 4K window doesn't multiply blur work by 16.
+export function blurSize(width, height) {
+    let factor = 4;
+    while (Math.ceil(width / factor) * Math.ceil(height / factor) > 262144) factor *= 2;
+    return {width: Math.max(1, Math.ceil(width / factor)),
+        height: Math.max(1, Math.ceil(height / factor)), factor};
+}
+export const FILTER_DECLARATIONS = 'uniform vec2 prismStep;';
+export const DOWNSAMPLE_CODE = `
+vec2 uv = cogl_tex_coord0_in.xy;
+cogl_color_out = 0.25 * (
+    texture2D(cogl_sampler0, uv + prismStep * vec2(-1.0, -1.0)) +
+    texture2D(cogl_sampler0, uv + prismStep * vec2( 1.0, -1.0)) +
+    texture2D(cogl_sampler0, uv + prismStep * vec2(-1.0,  1.0)) +
+    texture2D(cogl_sampler0, uv + prismStep * vec2( 1.0,  1.0)));
+`;
+// Precomputed Gaussian weights; no per-pixel trigonometry or exponentials.
+const weights = [0.028532, 0.067234, 0.124009, 0.179044, 0.202362,
+    0.179044, 0.124009, 0.067234, 0.028532];
+export const BLUR_CODE = 'cogl_color_out = ' + weights.map((w, i) =>
+    `${w.toFixed(6)} * texture2D(cogl_sampler0, cogl_tex_coord0_in.xy + prismStep * ${(i - 4).toFixed(1)})`).join(' +\n') + ';';
+
+export class BlurBuffer {
+    constructor(context) {
+        this._context = context;
+        this._targets = [];
+        this._downsample = this._pipeline(DOWNSAMPLE_CODE);
+        this._blur = this._pipeline(BLUR_CODE);
+    }
+
+    _pipeline(code) {
+        const pipeline = Cogl.Pipeline.new(this._context);
+        pipeline.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, FILTER_DECLARATIONS, code));
+        pipeline.set_layer_filters(0, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
+        pipeline.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+        pipeline.set_blend('RGBA = ADD (SRC_COLOR, 0)');
+        return {pipeline, step: pipeline.get_uniform_location('prismStep')};
+    }
+
+    _target(index, width, height) {
+        let target = this._targets[index];
+        if (!target || target.width !== width || target.height !== height) {
+            const texture = Cogl.Texture2D.new_with_size(this._context, width, height);
+            const framebuffer = Cogl.Offscreen.new_with_texture(texture);
+            framebuffer.allocate();
+            framebuffer.set_viewport(0, 0, width, height);
+            framebuffer.orthographic(0, 0, width, height, -1, 1);
+            target = {texture, framebuffer, width, height};
+            this._targets[index] = target;
+        }
+        return target;
+    }
+
+    _draw(target, filter, texture, step) {
+        filter.pipeline.set_layer_texture(0, texture);
+        filter.pipeline.set_uniform_float(filter.step, 2, 1, step);
+        target.framebuffer.draw_textured_rectangle(filter.pipeline,
+            0, 0, target.width, target.height, 0, 0, 1, 1);
+    }
+
+    render(texture, radius) {
+        const width = texture.get_width(), height = texture.get_height();
+        const size = blurSize(width, height);
+        const mid = this._target(0, size.width * 2, size.height * 2);
+        const small = this._target(1, size.width, size.height);
+        const horizontal = this._target(2, size.width, size.height);
+        const vertical = this._target(3, size.width, size.height);
+        this._draw(mid, this._downsample, texture, [0.25 / mid.width, 0.25 / mid.height]);
+        this._draw(small, this._downsample, mid.texture, [0.25 / small.width, 0.25 / small.height]);
+        this._draw(horizontal, this._blur, small.texture, [radius / (4 * width), 0]);
+        this._draw(vertical, this._blur, horizontal.texture, [0, radius / (4 * height)]);
+        return vertical.texture;
+    }
+}
