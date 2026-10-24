@@ -2,7 +2,7 @@ UUID = prism@local
 .PHONY: check package
 check:
 	glib-compile-schemas --strict --dry-run $(UUID)/schemas
-	gjs tools/check-syntax.js $(UUID)/extension.js $(UUID)/prefs.js $(UUID)/materials.js $(UUID)/shellSurfaces.js $(UUID)/gtkMenus.js $(UUID)/frostEffect.js $(UUID)/frostShader.js $(UUID)/backdrop.js $(UUID)/windowSurface.js $(UUID)/frostGeometry.js $(UUID)/frostBlur.js
+	gjs tools/check-syntax.js $(UUID)/extension.js $(UUID)/prefs.js $(UUID)/materials.js $(UUID)/shellSurfaces.js $(UUID)/gtkMenus.js $(UUID)/frostEffect.js $(UUID)/frostShader.js $(UUID)/backdrop.js $(UUID)/backdropRefreshEffect.js $(UUID)/windowSurface.js $(UUID)/frostGeometry.js $(UUID)/frostBlur.js $(UUID)/renderQuality.js
 	gjs -m tests/materials.js
 	gjs -m tests/lifecycle.js
 	gjs -m tests/shell-surfaces.js
@@ -13,7 +13,7 @@ check:
 package: check
 	glib-compile-schemas --strict $(UUID)/schemas
 	mkdir -p dist
-	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js windowSurface.js frostGeometry.js frostBlur.js schemas
+	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js schemas
 
 .PHONY: adapter
 adapter:
@@ -33,7 +33,9 @@ check-adapter: adapter
 .PHONY: check-frost-gpu
 check-frost-gpu:
 	gjs -m tests/frost.js
-	python3 tests/frost-gpu.py
+	python3 tests/frost-gpu.py eco
+	python3 tests/frost-gpu.py balanced
+	python3 tests/frost-gpu.py high
 
 .PHONY: check-runtime-api
 check-runtime-api:

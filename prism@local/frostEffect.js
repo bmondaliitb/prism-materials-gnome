@@ -14,6 +14,7 @@ class FrostEffect extends Shell.GLSLEffect {
     _init() {
         super._init();
         this.radius = 36;
+        this.quality = 'eco';
         this.brightness = 1;
         this.radii = [0, 0, 0, 0];
         this._capture = null;
@@ -65,7 +66,10 @@ class FrostEffect extends Shell.GLSLEffect {
             }
             const copied = source.blit(this._framebuffer, rect.x, rect.y, 0, 0, rect.width, rect.height);
             if (copied === false) throw new Error('Backdrop framebuffer copy failed');
-            if (!this._blurBuffer) this._blurBuffer = new BlurBuffer(source.get_context());
+            if (!this._blurBuffer || this._bufferQuality !== this.quality) {
+                this._blurBuffer = new BlurBuffer(source.get_context(), this.quality);
+                this._bufferQuality = this.quality;
+            }
             const radius = Math.max(0, Math.min(80, this.radius)) * capture.scale;
             this._blurred = radius > 0 ? this._blurBuffer.render(this._texture, radius) : this._texture;
             this._capture = capture;

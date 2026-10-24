@@ -1,5 +1,4 @@
 import GLib from 'gi://GLib';
-import Shell from 'gi://Shell';
 import {FrostEffect} from './frostEffect.js';
 import {shellSurfaceKind, shellSurfaceRole} from './materials.js';
 
@@ -145,20 +144,24 @@ export class ShellSurfaces {
             const radii = role === 'surface' ? this._radii(actor, kind) : null;
             const safe = this._settings.get_boolean('preserve-corners');
             const rounded = radii?.some(radius => radius > 0);
-            const type = role !== 'surface' ? null
+            const quality = this._settings.get_string('render-quality') ?? 'eco';
+            const type = role !== 'surface' || quality === 'off' ? null
                 : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
-                : (!safe || (radii && !rounded)) ? 'blur' : null;
+                : (!safe || (radii && !rounded)) ? 'frost' : null;
             if (saved.type !== type) {
                 if (saved.effect) actor.remove_effect(saved.effect);
-                saved.effect = type === 'frost' ? new FrostEffect()
-                    : type === 'blur' ? new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND}) : null;
+                saved.effect = type === 'frost' ? new FrostEffect() : null;
                 saved.type = type;
                 if (saved.effect) actor.add_effect(saved.effect);
             }
-            if (type === 'frost') saved.effect.radii = radii;
+            if (type === 'frost') {
+                saved.effect.radii = safe ? radii : [0, 0, 0, 0];
+                saved.effect.quality = quality;
+            }
             if (saved.effect) {
                 saved.effect.radius = Math.max(0, Math.min(80, this._settings.get_int('blur-radius')));
                 saved.effect.brightness = dark ? 0.85 : 1;
+                actor.queue_redraw?.();
             }
             // Theme !important rules (notably Yaru #panel) otherwise keep opaque paint.
             // BoxPointer paints its own Cairo background beneath popup-menu-content.

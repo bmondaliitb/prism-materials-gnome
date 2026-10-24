@@ -3,6 +3,12 @@
   <key name="enabled" type="b"><default>true</default></key>
   <key name="preset" type="s"><default>'frosted'</default></key>
   <key name="appearance" type="s"><default>'auto'</default></key>
+  <key name="render-quality" type="s">
+   <default>'eco'</default>
+   <choices><choice value="eco"/><choice value="balanced"/><choice value="high"/><choice value="off"/></choices>
+   <summary>Rendering level</summary>
+   <description>Eco reduces blur texture size and samples. Off keeps translucency without backdrop capture or blur.</description>
+  </key>
   <key name="blur-radius" type="i"><default>36</default></key>
   <key name="translucency" type="i"><default>92</default></key>
   <key name="force-translucency" type="b"><default>false</default></key>

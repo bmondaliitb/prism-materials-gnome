@@ -21,22 +21,25 @@ const values = {'enabled': true, 'reduce-transparency': false, 'focused-only': t
     'sidebar-materials': false, 'blur-radius': 36, 'force-translucency': true, 'translucency': 92};
 const settings = {};
 for (const method of ['get_boolean', 'get_strv', 'get_int', 'get_string']) settings[method] = key => values[key];
-const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'gtkMenuCss',
+const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'BackdropRefreshEffect', 'gtkMenuCss',
     source + '\nreturn Prism;')(
     class {}, {}, {WindowType: {NORMAL: 0, MENU: 1, DROPDOWN_MENU: 2, POPUP_MENU: 3, TOOLTIP: 4, COMBO: 5, DIALOG: 6, MODAL_DIALOG: 7, UTILITY: 8, TOOLBAR: 9, DESKTOP: 10}}, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {}}, {Widget},
-    {overview: {visible: false}, sessionMode: {isLocked: false}}, {display: {focus_window: win}}, eligible, materialStyle, class {isFrost = true;}, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, (dark, opacity) => `${dark}:${opacity}`);
+    {overview: {visible: false}, sessionMode: {isLocked: false}}, {display: {focus_window: win}}, eligible, materialStyle, class {isFrost = true;}, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`);
 const extension = new Prism();
 extension._settings = settings;
 extension._tracker = {get_window_app: () => ({get_id: () => 'test.desktop'})};
 const surface = {opacity: 240, constructor: {$gtype: 'MetaSurfaceContainerActorWayland'}};
 const decoration = {opacity: 255, constructor: {$gtype: 'OtherExtensionDecoration'}};
-const actor = {get_children: () => [decoration, surface], insert_child_at_index: () => {}};
+const actor = {effects: [], get_children: () => [decoration, surface], insert_child_at_index: () => {},
+    add_effect(effect) { this.effects.push(effect); },
+    remove_effect(effect) { this.effects = this.effects.filter(item => item !== effect); }};
 const state = {window: win, layer: null};
 function assert(value, message) { if (!value) throw new Error(message); }
 extension._update(actor, state);
 assert(surface.opacity === 221 && decoration.opacity === 255, 'Actual compositor root selected even behind another decoration');
 assert(state.layer.position.join() === '5,5', 'Backdrop uses frame-buffer offsets');
 assert(state.layer.size.join() === '500,400', 'Backdrop excludes shadow extents');
+assert(actor.effects.length === 1, 'Window actor receives a culling guard while backdrop capture is active');
 assert(!state.layer.properties.reactive && !state.layer.properties.can_focus && !state.layer.properties.track_hover, 'Backdrop cannot receive clicks, keyboard focus, or hover');
 extension._update(actor, state);
 assert(surface.opacity === 221, 'Repeated updates must not accumulate fading');
@@ -46,6 +49,7 @@ assert(surface.opacity === 240, 'Disabling forced translucency restores original
 values.enabled = false;
 extension._update(actor, state);
 assert(state.layer === null && surface.opacity === 240 && destroyed === 1, 'Suspending cleans up and restores');
+assert(actor.effects.length === 0, 'Suspending removes the window culling guard');
 extension._update(actor, state);
 assert(destroyed === 1, 'Repeated cleanup is idempotent');
 values.enabled = true;
@@ -105,6 +109,17 @@ values['rounded-frost'] = true;
 values['window-radius'] = 14;
 extension._update(actor, state);
 assert(state.layer !== null && state.effect.isFrost && state.effect.radii[0] === 14, 'Corner-safe app backdrops use configurable rounded frost');
+extension._clear(state);
+values['render-quality'] = 'off';
+extension._update(actor, state);
+assert(state.layer !== null && state.effect === null && surface.opacity === 221, 'Translucency-only keeps tint and opacity with no GPU capture effect');
+assert(actor.effects.length === 0, 'Translucency-only does not disable compositor culling');
+values['render-quality'] = 'eco';
+extension._update(actor, state);
+assert(state.effect.quality === 'eco', 'Switching from no blur to Eco creates the bounded renderer');
+values['render-quality'] = 'high';
+extension._update(actor, state);
+assert(state.effect.quality === 'high', 'App rendering level changes without reload');
 extension._clear(state);
 let writes = 0;
 values['gtk-menus'] = true;

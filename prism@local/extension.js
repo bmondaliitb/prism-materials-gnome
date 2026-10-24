@@ -10,6 +10,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {eligible, materialStyle} from './materials.js';
 
 import {VisualBackdrop} from './backdrop.js';
+import {BackdropRefreshEffect} from './backdropRefreshEffect.js';
 import {clientSurfaceRoot} from './windowSurface.js';
 import {FrostEffect} from './frostEffect.js';
 import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
@@ -70,7 +71,8 @@ export default class Prism extends Extension {
         if (this._windows.has(actor)) return;
         const window = actor.meta_window;
         if (!window) return;
-        const state = {window, layer: null, surface: null, opacity: null, signals: []};
+        const state = {actor, window, layer: null, surface: null, opacity: null,
+            refreshEffect: null, signals: []};
         this._windows.set(actor, state);
         for (const signal of ['size-changed', 'position-changed', 'notify::fullscreen', 'notify::minimized'])
             state.signals.push([window, window.connect(signal, () => this._update(actor, state))]);
@@ -106,6 +108,7 @@ export default class Prism extends Extension {
     }
 
     _update(actor, state) {
+        state.actor ??= actor;
         const s = this._settings;
         const w = state.window;
         const app = this._tracker.get_window_app(w)?.get_id();
@@ -136,7 +139,8 @@ export default class Prism extends Extension {
             state.opacity = state.surface.opacity;
         }
         const roundedFrost = s.get_boolean('preserve-corners') && s.get_boolean('rounded-frost');
-        const mode = roundedFrost ? 'frost' : 'blur';
+        const quality = s.get_string('render-quality') ?? 'eco';
+        const mode = quality === 'off' ? 'none' : 'frost';
         if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
         if (s.get_boolean('preserve-corners') && !roundedFrost) {
             // Meta.WindowActor doesn't expose the client's alpha silhouette.
@@ -147,10 +151,10 @@ export default class Prism extends Extension {
         } else {
             if (!state.layer) {
                 state.layer = new VisualBackdrop({reactive: false, can_focus: false, track_hover: false, clip_to_allocation: roundedFrost});
-                state.effect = roundedFrost ? new FrostEffect() : new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND});
+                state.effect = mode === 'none' ? null : new FrostEffect();
                 state.effectMode = mode;
                 state.layerStyle = null;
-                state.layer.add_effect(state.effect);
+                if (state.effect) state.layer.add_effect(state.effect);
                 actor.insert_child_at_index(state.layer, 0);
             }
             const frame = w.get_frame_rect();
@@ -159,11 +163,27 @@ export default class Prism extends Extension {
             state.layer.set_size(frame.width, frame.height);
             const dark = this._dark();
             const radius = Math.max(0, Math.min(48, s.get_int('window-radius')));
-            if (roundedFrost) state.effect.radii = [radius, radius, radius, radius];
+            if (state.effect) {
+                state.effect.radii = roundedFrost ? [radius, radius, radius, radius] : [0, 0, 0, 0];
+                state.effect.quality = quality;
+            }
             const style = materialStyle(s.get_string('preset'), dark) + (roundedFrost ? ` border-radius: ${radius}px;` : '');
             if (state.layerStyle !== style) { state.layer.set_style(style); state.layerStyle = style; }
-            state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
-            state.effect.brightness = dark ? 0.85 : 1.0;
+            if (state.effect) {
+                state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
+                state.effect.brightness = dark ? 0.85 : 1.0;
+            }
+            state.layer.queue_redraw?.();
+        }
+        // The frost layer is a child of MetaWindowActor. Without an effect on
+        // the window actor itself, Mutter can cull/clip the windows below it and
+        // our full-rectangle capture can contain stale damage tiles.
+        if (state.effect && !state.refreshEffect) {
+            state.refreshEffect = new BackdropRefreshEffect();
+            actor.add_effect(state.refreshEffect);
+        } else if (!state.effect && state.refreshEffect) {
+            actor.remove_effect(state.refreshEffect);
+            state.refreshEffect = null;
         }
         state.surface.opacity = !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
             ? Math.round(state.opacity * Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency'))) / 100)
@@ -172,6 +192,8 @@ export default class Prism extends Extension {
 
     _clear(state) {
         if (state.surface) state.surface.opacity = state.opacity;
+        if (state.refreshEffect) state.actor.remove_effect(state.refreshEffect);
+        state.refreshEffect = null;
         state.layer?.destroy();
         state.layer = null;
         state.surface = null;

@@ -1,10 +1,12 @@
 import Cogl from 'gi://Cogl';
+import {renderLevel} from './renderQuality.js';
 
 // Blur only a bounded, reduced-resolution image. Full-resolution compositing
 // stays a single sample, so adding a 4K window doesn't multiply blur work by 16.
-export function blurSize(width, height) {
-    let factor = 4;
-    while (Math.ceil(width / factor) * Math.ceil(height / factor) > 262144) factor *= 2;
+export function blurSize(width, height, quality = 'eco') {
+    const level = renderLevel(quality);
+    let factor = level.factor;
+    while (Math.ceil(width / factor) * Math.ceil(height / factor) > level.pixels) factor *= 2;
     return {width: Math.max(1, Math.ceil(width / factor)),
         height: Math.max(1, Math.ceil(height / factor)), factor};
 }
@@ -23,12 +25,17 @@ const weights = [0.028532, 0.067234, 0.124009, 0.179044, 0.202362,
 export const BLUR_CODE = 'cogl_color_out = ' + weights.map((w, i) =>
     `${w.toFixed(6)} * texture2D(cogl_sampler0, cogl_tex_coord0_in.xy + prismStep * ${(i - 4).toFixed(1)})`).join(' +\n') + ';';
 
+export const ECO_BLUR_CODE = 'cogl_color_out = ' + [0.06136, 0.24477, 0.38774, 0.24477, 0.06136].map((w, i) =>
+    `${w.toFixed(6)} * texture2D(cogl_sampler0, cogl_tex_coord0_in.xy + prismStep * ${(i - 2).toFixed(1)})`).join(' +\n') + ';';
+
 export class BlurBuffer {
-    constructor(context) {
+    constructor(context, quality = 'eco') {
+        this._quality = quality;
+        this._level = renderLevel(quality);
         this._context = context;
         this._targets = [];
         this._downsample = this._pipeline(DOWNSAMPLE_CODE);
-        this._blur = this._pipeline(BLUR_CODE);
+        this._blur = this._pipeline(this._level.taps === 5 ? ECO_BLUR_CODE : BLUR_CODE);
     }
 
     _pipeline(code) {
@@ -63,15 +70,15 @@ export class BlurBuffer {
 
     render(texture, radius) {
         const width = texture.get_width(), height = texture.get_height();
-        const size = blurSize(width, height);
+        const size = blurSize(width, height, this._quality);
         const mid = this._target(0, size.width * 2, size.height * 2);
         const small = this._target(1, size.width, size.height);
         const horizontal = this._target(2, size.width, size.height);
         const vertical = this._target(3, size.width, size.height);
         this._draw(mid, this._downsample, texture, [0.25 / mid.width, 0.25 / mid.height]);
         this._draw(small, this._downsample, mid.texture, [0.25 / small.width, 0.25 / small.height]);
-        this._draw(horizontal, this._blur, small.texture, [radius / (4 * width), 0]);
-        this._draw(vertical, this._blur, horizontal.texture, [0, radius / (4 * height)]);
+        this._draw(horizontal, this._blur, small.texture, [radius / (((this._level.taps - 1) / 2) * width), 0]);
+        this._draw(vertical, this._blur, horizontal.texture, [0, radius / (((this._level.taps - 1) / 2) * height)]);
         return vertical.texture;
     }
 }

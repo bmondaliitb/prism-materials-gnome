@@ -3,6 +3,11 @@ import ctypes as C
 import json
 import os
 import statistics
+import sys
+quality = sys.argv[1] if len(sys.argv) > 1 else 'balanced'
+factor, taps = {'eco': (8,5), 'balanced': (4,9), 'high': (2,9)}[quality]
+small_size = 64 // factor
+mid_size = small_size * 2
 os.environ.setdefault('LIBGL_ALWAYS_SOFTWARE', '1')
 os.environ.setdefault('EGL_PLATFORM', 'surfaceless')
 E = C.CDLL('libEGL.so.1'); G = C.CDLL('libGLESv2.so.2')
@@ -76,9 +81,9 @@ def filter_program(code):
  bind(G,'glLinkProgram',None,U)(result)
  ok=I();bind(G,'glGetProgramiv',None,U,U,C.POINTER(I))(result,0x8B82,C.byref(ok));assert ok.value
  return result
-filters=[filter_program(snippet['downsample']),filter_program(snippet['blur'])]
+filters=[filter_program(snippet['downsample']),filter_program(snippet['ecoBlur'] if quality == 'eco' else snippet['blur'])]
 targets=[]
-for size in [32,16,16,16]:
+for size in [mid_size,small_size,small_size,small_size]:
  tex=U();bind(G,'glGenTextures',None,I,C.POINTER(U))(1,C.byref(tex));bindTexture(0x0DE1,tex)
  for param,value in [(0x2801,0x2601),(0x2800,0x2601),(0x2802,0x812F),(0x2803,0x812F)]:parameter(0x0DE1,param,value)
  bind(G,'glTexImage2D',None,U,I,I,I,I,I,U,U,P)(0x0DE1,0,0x1908,size,size,0,0x1908,0x1401,None)
@@ -89,7 +94,7 @@ for size in [32,16,16,16]:
 def render(radius):
  input_texture=texture
  if radius>0:
-  for target,filter_id,step in zip(targets,[0,0,1,1],[(0.25/32,0.25/32),(0.25/16,0.25/16),(radius/256,0),(0,radius/256)]):
+  for target,filter_id,step in zip(targets,[0,0,1,1],[(0.25/mid_size,0.25/mid_size),(0.25/small_size,0.25/small_size),(radius/((taps-1)*32),0),(0,radius/((taps-1)*32))]):
    tex,fbo,size=target; filter=filters[filter_id]
    use(filter);bindFramebuffer(0x8D40,fbo);viewport(0,0,size,size);bindTexture(0x0DE1,input_texture)
    set2(loc(filter,b'prismStep'),*step);draw(5,0,4);input_texture=tex
@@ -126,6 +131,6 @@ for axis in [0,1]:
  x,y=(27,32) if axis==0 else (32,27)
  assert 10 < soft[(y*64+x)*4] < 120, 'Separable pass must soften a broad edge on each axis'
 assert bind(G,'glGetError',U)()==0,'GL error'
-print(f'Actual GLSL pixel test passed: detail deviation {spread(sharp):.1f} -> {spread(frosted):.1f}; transparent corners, opaque center')
+print(f'Actual {quality} GLSL pixel test passed: detail deviation {spread(sharp):.1f} -> {spread(frosted):.1f}; transparent corners, opaque center')
 bind(E,'eglMakeCurrent',U,P,P,P,P)(display,None,None,None)
 bind(E,'eglDestroyContext',U,P,P)(display,ctx);bind(E,'eglDestroySurface',U,P,P)(display,surf);bind(E,'eglTerminate',U,P)(display)

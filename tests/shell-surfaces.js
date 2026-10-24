@@ -45,7 +45,7 @@ const root = new Actor('', [pointer, orphan, dock, panel, dialog, looseCalendar,
 let active = false;
 const values = {'shell-menus': true, 'shell-panel': true, 'shell-dock': false, 'shell-dialogs': false,
     'shell-opacity': 85, 'blur-radius': 36};
-const settings = {get_boolean: key => values[key], get_int: key => values[key]};
+const settings = {get_boolean: key => values[key], get_int: key => values[key], get_string: key => values[key]};
 const manager = new Manager(root, panel, settings, () => true, () => active);
 assert(menu.effects.length === 0, 'Global suspension prevents Shell styling');
 active = true; manager.refresh();
@@ -98,6 +98,12 @@ assert(menu.effects.length === 0, 'One rounded corner is enough to suppress rect
 menu.radii = [0, 0, 0, 0];
 manager.refresh();
 assert(menu.effects.length === 1, 'Square theme shape can safely restore blur');
+values['render-quality'] = 'off'; manager.refresh();
+assert(menu.effects.length === 0 && panel.effects.length === 0 && menu.style.includes('rgba('), 'No-blur mode removes all capture effects but keeps tint');
+values['render-quality'] = 'eco'; manager.refresh();
+assert(menu.effects[0].quality === 'eco' && panel.effects[0].quality === 'eco', 'Eco applies to square panel and menu surfaces');
+values['render-quality'] = 'high'; manager.refresh();
+assert(menu.effects[0].quality === 'high', 'Live rendering-level change reaches the effect');
 const getTheme = menu.get_theme_node;
 menu.get_theme_node = undefined;
 manager.refresh();

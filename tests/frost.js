@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import {renderLevel, RENDER_LEVELS} from '../prism@local/renderQuality.js';
 import Graphene from 'gi://Graphene';
 import {framebufferCapture} from '../prism@local/frostGeometry.js';
 import {backdropRect, FROST_DECLARATIONS, FROST_CODE} from '../prism@local/frostShader.js';
@@ -37,7 +38,7 @@ const types = {Texture2D: {new_with_size: (_ctx, w, h) => new Texture(w, h)},
     PipelineFilter: {LINEAR: 0}, PipelineWrapMode: {CLAMP_TO_EDGE: 0}};
 const Effect = new Function('Clutter', 'Cogl', 'GObject', 'Mtk', 'Shell', 'FROST_DECLARATIONS', 'FROST_CODE', 'framebufferCapture', 'BlurBuffer', 'console', source + '\nreturn FrostEffect;')(
     {EffectPaintFlags: {ACTOR_DIRTY: 1}}, types, {registerClass: (_meta, cls) => cls}, {Rectangle: class {x=0; y=0;}},
-    {GLSLEffect: Parent}, FROST_DECLARATIONS, FROST_CODE, framebufferCapture, class {render(texture) { return texture; }}, {error: () => fallback = true});
+    {GLSLEffect: Parent}, FROST_DECLARATIONS, FROST_CODE, framebufferCapture, class {constructor(context, quality) { this.quality = quality; } render(texture) { return texture; }}, {error: () => fallback = true});
 const effect = new Effect();
 effect._actor = {get_transformed_position: () => [10, 20], get_transformed_size: () => [100, 80],
     get_size: () => [100, 80], get_resource_scale: () => 1, get_paint_opacity: () => 255};
@@ -64,6 +65,11 @@ effect.vfunc_pre_paint(null, context);
 const originalTexture = effect._texture;
 effect.vfunc_pre_paint(null, context);
 assert(effect._texture === originalTexture, 'Stable bounds reuse GPU storage');
+const oldBlurBuffer = effect._blurBuffer;
+effect.quality = 'high';
+effect.vfunc_pre_paint(null, context);
+assert(effect._blurBuffer !== oldBlurBuffer && effect._blurBuffer.quality === 'high', 'Changing rendering level rebuilds the filter with its new budget');
+assert(effect._texture === originalTexture, 'Rendering-level changes reuse full-size capture storage');
 effect._actor.get_size = () => [101,81];
 effect.vfunc_pre_paint(null, context);
 assert(effect._texture === originalTexture, 'Small live resize reuses capture storage');
@@ -93,17 +99,30 @@ const filterTypes = {...types,
     Snippet: {new: () => ({})}, SnippetHook: {FRAGMENT: 0},
     Offscreen: {new_with_texture: () => ({allocate() { allocations++; }, set_viewport() {}, orthographic() {},
         draw_textured_rectangle() { draws++; }})}};
-const filters = new Function('Cogl', blurSource + '\nreturn {BlurBuffer, blurSize, FILTER_DECLARATIONS, DOWNSAMPLE_CODE, BLUR_CODE};')(filterTypes);
+const filters = new Function('Cogl', 'renderLevel', blurSource + '\nreturn {BlurBuffer, blurSize, FILTER_DECLARATIONS, DOWNSAMPLE_CODE, BLUR_CODE, ECO_BLUR_CODE};')(filterTypes, renderLevel);
 for (const [w, h] of [[1920,1080], [3840,2160], [7680,4320], [1,1]]) {
     const size = filters.blurSize(w,h);
     assert(size.width * size.height <= 262144, 'Blur pixel budget stays bounded at high resolution');
 }
-const blur = new filters.BlurBuffer({});
+const blur = new filters.BlurBuffer({}, 'balanced');
 const input = new Texture(3840,2160);
 const output = blur.render(input, 56);
 assert(output.get_width() < 3840 && draws === 4 && allocations === 4, 'Blur uses four small passes');
 assert(blur.render(input, 36) === output && allocations === 4, 'Frame and radius changes reuse intermediate storage');
 assert(draws === 8, 'Live backdrop is updated without stale caching');
+for (const [quality, level] of Object.entries(RENDER_LEVELS)) {
+    for (const [w,h] of [[1920,1080],[3840,2160],[7680,4320],[1,1]]) {
+        const size = filters.blurSize(w,h,quality);
+        assert(size.width * size.height <= level.pixels && size.factor >= level.factor,
+            `${quality} obeys its pixel and downsampling budgets`);
+    }
+    const buffer = new filters.BlurBuffer({}, quality);
+    const result = buffer.render(input, 56);
+    assert(result.get_width() === filters.blurSize(3840,2160,quality).width, `${quality} reaches actual target allocation`);
+}
+assert(renderLevel('invalid') === RENDER_LEVELS.eco, 'Unknown profiles safely use Eco');
+assert(filters.blurSize(1920,1080,'eco').width < filters.blurSize(1920,1080,'balanced').width,
+    'Eco materially reduces GPU target size');
 GLib.file_set_contents('/tmp/prism-frost-shader.json', JSON.stringify({declarations: FROST_DECLARATIONS, code: FROST_CODE,
-    filterDeclarations: filters.FILTER_DECLARATIONS, downsample: filters.DOWNSAMPLE_CODE, blur: filters.BLUR_CODE}));
+    filterDeclarations: filters.FILTER_DECLARATIONS, downsample: filters.DOWNSAMPLE_CODE, blur: filters.BLUR_CODE, ecoBlur: filters.ECO_BLUR_CODE}));
 print('Frost capture geometry, GPU storage, uniform, and fallback checks passed');

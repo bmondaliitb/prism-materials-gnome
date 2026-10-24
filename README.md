@@ -2,7 +2,11 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 13:** [lower-cost frosted glass](docs/PERFORMANCE.md): bounded reduced-resolution blur, reusable GPU buffers, and less work on focus and hover.
+**New in version 15:** live window frost now marks its top-level compositor actor as backdrop-dependent, preventing partial-redraw tiles from leaving dark square trails when windows move or update underneath it. The guard does not add another offscreen rendering pass and is removed in Translucency-only mode.
+
+**Version 14:** choose **Rendering level** in Material settings: Eco (default for integrated GPUs), Balanced, High, or Translucency only (no blur/capture). Changes apply immediately after this version is loaded. See [rendering budgets](docs/PERFORMANCE.md).
+
+**Version 13:** [lower-cost frosted glass](docs/PERFORMANCE.md): bounded reduced-resolution blur, reusable GPU buffers, and less work on focus and hover.
 
 **Version 12:** [popup consistency fixes](docs/POPUPS.md): offscreen frost capture uses the active framebuffer matrices, custom popup wrappers keep native tint when no replacement surface exists, and GTK menu styling is self-contained for theme forwarding.
 

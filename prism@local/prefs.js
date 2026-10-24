@@ -32,6 +32,9 @@ export default class PrismPreferences extends ExtensionPreferences {
             group.add(row);
         };
         combo('Material finish', 'preset', ['clear', 'frosted', 'soft'], ['Clear · a little atmosphere', 'Frosted · everyday balance', 'Soft · stronger separation']);
+        combo('Rendering level', 'render-quality', ['eco', 'balanced', 'high', 'off'],
+            ['Eco · integrated GPU (default)', 'Balanced · smoother frost', 'High · finer detail', 'Translucency only · no blur']);
+        group.add(new Adw.ActionRow({title: 'Rendering cost', subtitle: 'Eco uses smaller blur textures and fewer samples for windows and Shell surfaces. Translucency only removes blur and backdrop capture. GTK app menus keep their CSS styling.'}));
         combo('Appearance', 'appearance', ['auto', 'light', 'dark'], ['Follow desktop', 'Light', 'Dark']);
         for (const [title, key, min, max, subtitle] of [
             ['Blur radius', 'blur-radius', 0, 80, 'Higher values soften more background detail'],
