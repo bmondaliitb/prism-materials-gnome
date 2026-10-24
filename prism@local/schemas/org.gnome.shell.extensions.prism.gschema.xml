@@ -1,6 +1,12 @@
 <schemalist>
  <schema id="org.gnome.shell.extensions.prism" path="/org/gnome/shell/extensions/prism/">
   <key name="enabled" type="b"><default>true</default></key>
+  <key name="material-hierarchy" type="b"><default>true</default></key>
+  <key name="focus-emphasis" type="b"><default>true</default></key>
+  <key name="glass-edges" type="b"><default>true</default></key>
+  <key name="gentle-transitions" type="b"><default>true</default></key>
+  <key name="auto-comfort" type="b"><default>true</default></key>
+  <key name="wallpaper-panel" type="b"><default>true</default></key>
   <key name="preset" type="s"><default>'frosted'</default></key>
   <key name="appearance" type="s"><default>'auto'</default></key>
   <key name="render-quality" type="s">

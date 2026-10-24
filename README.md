@@ -2,7 +2,9 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 20:** panel foreground styling is restricted to actual labels and icons; workspace dots, buttons, and layout widgets retain their native styling. Panel shadows have been removed. The top bar uses GNOME's native background blur instead of the custom rounded shader, avoiding custom clipping of panel controls. Eco caps its native blur radius at 18 px, Balanced at 32 px, and High at 80 px. The independent 25% tint default is retained.
+**New in version 21:** six optional finishing features under **Comfort and behavior**: material hierarchy, active-window emphasis, glass edge highlights, gentle tint transitions, automatic comfort, and wallpaper-aware panel colors. They default on. See [behavior and limits](docs/EXPERIENCE.md). Automatic comfort uses Eco and focused app backdrops only on battery/power saver, without changing saved preferences.
+
+**Version 20:** restricted panel foreground styling to actual labels/icons and switched the top bar to native GNOME blur. Workspace dots and layouts keep their native styling; the independent 25% panel tint remains.
 
 **Version 19:** lowered the top bar default tint to 25% and allowed 0–100%. Previously customized opacity values are preserved; set **Top bar background opacity** to 25% to use the lighter tint.
 

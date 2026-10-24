@@ -11,11 +11,13 @@ check:
 	gjs -m tests/input.js
 	gjs -m tests/redraw-guard.js
 	gjs tools/check-syntax.js $(UUID)/redrawGuard.js
+	gjs tools/check-syntax.js $(UUID)/experience.js
+	gjs -m tests/experience.js
 	/usr/bin/python3 tests/gtk-menu-css.py
 package: check
 	glib-compile-schemas --strict $(UUID)/schemas
 	mkdir -p dist
-	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js schemas
+	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js experience.js schemas
 
 .PHONY: adapter
 adapter:

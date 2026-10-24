@@ -1,0 +1,14 @@
+# Finishing features (version 21)
+
+All six additions can be disabled individually under Comfort and behavior. Existing rendering quality, app selection, panel opacity, sidebar boundaries, and manual Reduce transparency remain available.
+
+| Feature | Behavior | Cost and limits |
+| --- | --- | --- |
+| Material hierarchy | Shell dialogs add 8 opacity points; notifications add 5; dock subtracts 10. Menus keep the chosen Shell opacity and the panel keeps its independent opacity. Whole-window dialogs stay at least 96% opaque when whole-window fading is active. | Tint changes only; original scope and corner safety still apply. |
+| Active-window emphasis | Focused app backdrop edges are clearer; inactive app backdrops receive a quieter, stronger tint. | Most visible with Focused window only off and a translucent client. Opaque client regions can hide backdrop edges. App content opacity is not animated. |
+| Glass edges | One-pixel highlights on owned app backdrops and Shell surface backgrounds. | No extra blur pass or shadows; workspace widgets and panel layouts are excluded. |
+| Gentle transitions | Native 140 ms tint transitions on material background changes. | Respects GNOME Enable animations; disabled during automatic battery/power-saver mode. This is not a custom window movement animation. |
+| Automatic comfort | System high contrast restores native styling and app opacity. On battery or power saver, rendering uses Eco and app backdrops are limited to the focused app. | Event-driven UPower and Power Profiles D-Bus subscriptions; missing services are tolerated. No preferences are rewritten. Manual blur-off remains off. Shell surfaces retain their chosen scope. |
+| Wallpaper-aware panel colors | Samples the top fifth of a wallpaper decoded asynchronously to at most 64×64 pixels. Chooses dark or light clock/icon foreground from estimated wallpaper-plus-panel tint brightness. | Runs on wallpaper/appearance changes, never per frame. Uses the selected primary wallpaper, not windows behind the bar, per-monitor crops, or a screenshot. Solid primary colors are supported; unsupported or inaccessible images fall back to appearance-based colors. |
+
+Live compositor appearance and power-service integration cannot be fully verified from this workspace. Regression tests cover policy, real image sampling, focus/high-contrast/power behavior, setting preservation, Shell material application, reduced motion, and workspace-widget isolation. Existing shader tests still cover all blur quality levels. GTK apps must restart to reload the managed menu stylesheet, including when high contrast changes remove or restore it.

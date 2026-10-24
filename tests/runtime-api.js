@@ -2,6 +2,8 @@
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
+import Gio from 'gi://Gio';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import {BackdropRefreshEffect} from '../prism@local/backdropRefreshEffect.js';
 function check(type, names) {
     for (const name of names)
@@ -15,6 +17,9 @@ check(Clutter.Actor, ['is_mapped']);
 for (const method of ['get_debug_flags', 'add_debug_flags', 'remove_debug_flags'])
     if (typeof Clutter[method] !== 'function') throw new Error(`Missing ${method}`);
 if (!Clutter.DrawDebugFlag.DISABLE_CLIPPED_REDRAWS) throw new Error('Missing redraw compatibility flag');
+for (const [object, methods] of [[Gio.DBusProxy, ['new_for_bus', 'new_for_bus_finish']],
+    [GdkPixbuf.Pixbuf, ['new_from_stream_at_scale_async', 'new_from_stream_finish']]])
+    for (const method of methods) if (typeof object[method] !== 'function') throw new Error(`Missing experience API ${method}`);
 check(Clutter.StageView, ['get_framebuffer', 'get_onscreen', 'get_layout', 'get_scale']);
 check(Cogl.Framebuffer, ['draw_textured_rectangle', 'orthographic', 'set_viewport', 'blit', 'allocate', 'get_context', 'get_width', 'get_height', 'get_modelview_matrix', 'get_projection_matrix', 'get_viewport_x', 'get_viewport_y', 'get_viewport_width', 'get_viewport_height']);
 check(Cogl.Pipeline, ['add_snippet', 'get_uniform_location', 'set_uniform_float', 'set_layer_texture', 'set_layer_combine', 'set_layer_filters', 'set_layer_wrap_mode', 'set_blend']);

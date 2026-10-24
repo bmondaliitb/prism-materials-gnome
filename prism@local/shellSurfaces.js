@@ -3,10 +3,12 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {FrostEffect} from './frostEffect.js';
 import {shellSurfaceKind, shellSurfaceRole} from './materials.js';
+import {surfaceOpacity, panelIsDark} from './experience.js';
 
 // Event-driven discovery also covers menus/docks created after Prism is enabled.
 export class ShellSurfaces {
-    constructor(root, panel, settings, isDark, permitted, redrawGuard = null) {
+    constructor(root, panel, settings, isDark, permitted, redrawGuard = null, context = () => ({})) {
+        this._context = context;
         this._redrawGuard = redrawGuard;
         this._settings = settings;
         this._panel = panel;
@@ -135,11 +137,14 @@ export class ShellSurfaces {
     refresh() {
         const active = this._permitted();
         const dark = this._isDark();
+        const context = this._context();
         const tint = dark ? '24,27,36' : '240,244,252';
         const alpha = Math.max(40, Math.min(100, this._settings.get_int('shell-opacity'))) / 100;
         const panelAlpha = Math.max(0, Math.min(100, this._settings.get_int('panel-opacity'))) / 100;
         const panelTint = dark ? '32,34,38' : '218,222,228';
-        const panelForeground = dark ? '246,247,249' : '16,20,26';
+        const panelDark = this._settings.get_boolean('wallpaper-panel')
+            ? panelIsDark(dark, panelAlpha, context.luminance) : dark;
+        const panelForeground = panelDark ? '246,247,249' : '16,20,26';
         for (const actor of this._watched.keys()) {
             if (typeof actor.get_style !== 'function') continue;
             const {kind, role} = this._describe(actor);
@@ -158,7 +163,7 @@ export class ShellSurfaces {
             const radii = role === 'surface' ? this._radii(actor, kind) : null;
             const safe = this._settings.get_boolean('preserve-corners');
             const rounded = radii?.some(radius => radius > 0);
-            const quality = this._settings.get_string('render-quality') ?? 'eco';
+            const quality = context.quality ?? this._settings.get_string('render-quality') ?? 'eco';
             const type = role !== 'surface' || quality === 'off' ? null
                 : kind === 'panel' ? ((!safe || (radii && !rounded)) ? 'native-panel' : null)
                 : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
@@ -191,15 +196,19 @@ export class ShellSurfaces {
             this._redrawGuard?.track(actor, Boolean(saved.effect));
             // Theme !important rules (notably Yaru #panel) otherwise keep opaque paint.
             // BoxPointer paints its own Cairo background beneath popup-menu-content.
+            const materialAlpha = surfaceOpacity(kind, alpha, this._settings.get_boolean('material-hierarchy'));
             const background = role === 'surface'
-                ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})` : `rgba(${tint},${alpha})`) : 'transparent';
+                ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})` : `rgba(${tint},${materialAlpha})`) : 'transparent';
             const pointer = role === 'pointer' ? '-arrow-background-color: transparent !important;'
-                : role === 'pointer-fill' ? `-arrow-background-color: rgba(${tint},${alpha}) !important;` : '';
+                : role === 'pointer-fill' ? `-arrow-background-color: rgba(${tint},${materialAlpha}) !important;` : '';
             const base = saved.style?.trim() ?? '';
             const foreground = role === 'foreground' ? `color: rgb(${panelForeground}) !important;` : '';
             const fill = role === 'foreground' ? ''
                 : `background-image: none !important; background-color: ${background} !important; ${pointer}`;
-            saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground}`;
+            const edge = role === 'surface' && kind !== 'panel' && this._settings.get_boolean('glass-edges')
+                ? `border: 1px solid rgba(${dark ? '255,255,255,0.18' : '255,255,255,0.5'});` : '';
+            const transition = role === 'surface' ? `transition-duration: ${this._settings.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower ? 140 : 0}ms;` : '';
+            saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge} ${transition}`;
             if (actor.get_style() !== saved.appliedStyle) {
                 this._settingStyle = true;
                 try { actor.set_style(saved.appliedStyle); }
@@ -217,5 +226,6 @@ export class ShellSurfaces {
         this._panel = null;
         this._isDark = null;
         this._permitted = null;
+        this._context = null;
     }
 }

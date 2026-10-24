@@ -16,6 +16,7 @@ import {clientSurfaceRoot} from './windowSurface.js';
 import {FrostEffect} from './frostEffect.js';
 import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
 import {ShellSurfaces} from './shellSurfaces.js';
+import {Experience} from './experience.js';
 
 export default class Prism extends Extension {
     enable() {
@@ -50,10 +51,14 @@ export default class Prism extends Extension {
         this._connect(Main.overview, 'showing', () => this._refresh());
         this._connect(Main.overview, 'hidden', () => this._refresh());
         this._connect(Main.sessionMode, 'updated', () => this._refresh());
+        this._experience = new Experience(this._settings, this._interface, () => {
+            this._syncGtkMenus();
+            this._refresh();
+        });
         this._shellSurfaces = new ShellSurfaces(Main.uiGroup, Main.panel, this._settings,
             () => this._dark(), () => this._settings.get_boolean('enabled') &&
-                !this._settings.get_boolean('reduce-transparency') && !Main.sessionMode.isLocked,
-            this._redrawGuard);
+                !this._reduced() && !Main.sessionMode.isLocked,
+            this._redrawGuard, () => this._context());
         for (const actor of global.get_window_actors())
             this._watch(actor);
         this._syncGtkMenus();
@@ -93,10 +98,23 @@ export default class Prism extends Extension {
         return appearance === 'dark' || (appearance === 'auto' && this._interface.get_string('color-scheme') === 'prefer-dark');
     }
 
+    _context() {
+        const state = this._experience?.state ?? {};
+        const automatic = this._settings.get_boolean('auto-comfort');
+        const quality = this._settings.get_string('render-quality') ?? 'eco';
+        return {...state, lowPower: automatic && state.lowPower,
+            quality: automatic && state.lowPower && quality !== 'off' ? 'eco' : quality};
+    }
+
+    _reduced() {
+        return this._settings.get_boolean('reduce-transparency') ||
+            (this._settings.get_boolean('auto-comfort') && this._experience?.state.highContrast);
+    }
+
     _syncGtkMenus(disabling = false) {
         try {
             const active = !disabling && this._settings.get_boolean('gtk-menus') &&
-                this._settings.get_boolean('enabled') && !this._settings.get_boolean('reduce-transparency');
+                this._settings.get_boolean('enabled') && !this._reduced();
             const css = active ? gtkMenuCss(this._dark(), this._settings.get_int('shell-opacity')) : null;
             if (!disabling && this._gtkCss === css) return;
             this._gtkMenus?.apply(css);
@@ -125,13 +143,15 @@ export default class Prism extends Extension {
         const parent = w.get_transient_for?.();
         const ownerApp = app ?? (parent && this._tracker.get_window_app(parent)?.get_id());
         const sidebarMode = !isPopup && s.get_boolean('sidebar-materials');
-        const active = s.get_boolean('enabled') && !s.get_boolean('reduce-transparency') &&
+        const context = this._context();
+        const focused = global.display.focus_window === w || global.display.focus_window === parent;
+        const active = s.get_boolean('enabled') && !this._reduced() &&
             !Main.overview.visible && !Main.sessionMode.isLocked && eligible({
                 normal: type === Meta.WindowType.NORMAL || (isPopup && s.get_boolean('window-popups')) ||
                     (isDialog && s.get_boolean('window-dialogs')),
                 fullscreen: w.is_fullscreen(), minimized: w.minimized,
-                focused: global.display.focus_window === w || global.display.focus_window === parent,
-                focusOnly: s.get_boolean('focused-only'),
+                focused,
+                focusOnly: s.get_boolean('focused-only') || context.lowPower,
                 app: ownerApp,
                 allApplications: s.get_boolean('all-applications'),
                 applications: s.get_strv('applications'),
@@ -144,7 +164,7 @@ export default class Prism extends Extension {
             state.opacity = state.surface.opacity;
         }
         const roundedFrost = s.get_boolean('preserve-corners') && s.get_boolean('rounded-frost');
-        const quality = s.get_string('render-quality') ?? 'eco';
+        const quality = context.quality;
         const mode = quality === 'off' ? 'none' : 'frost';
         if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
         if (s.get_boolean('preserve-corners') && !roundedFrost) {
@@ -173,7 +193,11 @@ export default class Prism extends Extension {
                 state.effect.radii = roundedFrost ? [radius, radius, radius, radius] : [0, 0, 0, 0];
                 state.effect.quality = quality;
             }
-            const style = materialStyle(s.get_string('preset'), dark) + (roundedFrost ? ` border-radius: ${radius}px;` : '');
+            const style = materialStyle(s.get_string('preset'), dark, {
+                focused, emphasis: s.get_boolean('focus-emphasis') && !isPopup && !isDialog,
+                edges: s.get_boolean('glass-edges'),
+                transitions: s.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower,
+            }) + (roundedFrost ? ` border-radius: ${radius}px;` : '');
             if (state.layerStyle !== style) { state.layer.set_style(style); state.layerStyle = style; }
             if (state.effect) {
                 state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
@@ -197,8 +221,10 @@ export default class Prism extends Extension {
             state.refreshEffect = null;
         }
         this._redrawGuard?.track(state.layer, Boolean(state.effect));
+        let opacity = Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency')));
+        if (s.get_boolean('material-hierarchy') && isDialog) opacity = Math.max(96, opacity);
         state.surface.opacity = !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
-            ? Math.round(state.opacity * Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency'))) / 100)
+            ? Math.round(state.opacity * opacity / 100)
             : state.opacity;
     }
 
@@ -214,6 +240,8 @@ export default class Prism extends Extension {
     }
 
     disable() {
+        this._experience?.destroy();
+        this._experience = null;
         this._syncGtkMenus(true);
         this._gtkMenus = null;
         this._shellSurfaces?.destroy();

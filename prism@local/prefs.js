@@ -48,6 +48,12 @@ export default class PrismPreferences extends ExtensionPreferences {
         const behavior = new Adw.PreferencesGroup({title: 'Comfort and behavior'});
         page.add(behavior);
         for (const [title, subtitle, key] of [
+            ['Material hierarchy', 'Airier dock, stronger dialogs and notifications. Whole-window dialogs stay at least 96% opaque.', 'material-hierarchy'],
+            ['Active-window emphasis', 'Clearer backdrop edges on the focused app, quieter tint on inactive apps. Most visible when Focused window only is off.', 'focus-emphasis'],
+            ['Glass edge highlights', 'Fine highlights on application backdrops and Shell menus, without extra blur passes.', 'glass-edges'],
+            ['Gentle tint transitions', '140 ms native color transitions. Respects GNOME animations and is suspended on battery or power saver with Automatic comfort enabled.', 'gentle-transitions'],
+            ['Automatic comfort', 'Restore native styling in system high contrast. Use Eco and focused app backdrops only on battery or power saver, without changing saved preferences.', 'auto-comfort'],
+            ['Wallpaper-aware panel colors', 'Estimate clock and icon contrast from the wallpaper’s top band when it changes. Uses the primary wallpaper, not windows behind the panel; unsupported images fall back to appearance colors.', 'wallpaper-panel'],
             ['Stable backdrop redraws', 'Prevents partial-redraw patches while frosted surfaces are visible. Repaints full monitor frames on updates, which can use more GPU power. No continuous repainting.', 'stable-redraws'],
             ['Preserve native rounded corners', 'Keeps material inside rounded boundaries. Disable Rounded frosted glass below to fall back to clear translucency.', 'preserve-corners'],
             ['Rounded frosted glass', 'Experimental GPU blur with rounded clipping for Shell surfaces and app backdrops. Capture failures fall back to translucency. GTK item menus use matched styling, without their own blur.', 'rounded-frost'],

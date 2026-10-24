@@ -4,10 +4,12 @@ export const PRESETS = Object.freeze({
     soft: {name: 'Soft', radius: 56, tint: 0.28},
 });
 
-export function materialStyle(preset, dark) {
-    const tint = (PRESETS[preset] ?? PRESETS.frosted).tint;
+export function materialStyle(preset, dark, options = {}) {
+    const inactive = options.emphasis && !options.focused;
+    const tint = Math.min(0.6, (PRESETS[preset] ?? PRESETS.frosted).tint + (inactive ? 0.08 : 0));
     const color = dark ? '24, 27, 36' : '240, 244, 252';
-    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(255,255,255,${dark ? 0.12 : 0.32});`;
+    const edge = options.edges ? (inactive ? 0.06 : dark ? 0.26 : 0.55) : (dark ? 0.12 : 0.32);
+    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(255,255,255,${edge}); transition-duration: ${options.transitions ? 140 : 0}ms;`;
 }
 
 export function eligible({normal, fullscreen, minimized, focused, focusOnly, app, applications, allApplications = false}) {

@@ -1,16 +1,17 @@
 import GLib from 'gi://GLib';
 import {shellSurfaceKind, shellSurfaceRole} from '../prism@local/materials.js';
+import {surfaceOpacity, panelIsDark} from '../prism@local/experience.js';
 const [, bytes] = GLib.file_get_contents('prism@local/shellSurfaces.js');
 const source = new TextDecoder().decode(bytes).replace(/^import .*;\n/gm, '').replace('export class', 'class');
 const callbacks = new Map(); let sourceId = 0;
 const loop = {PRIORITY_DEFAULT_IDLE: 0, SOURCE_REMOVE: false,
     idle_add: (_priority, callback) => { callbacks.set(++sourceId, callback); return sourceId; },
     source_remove: id => callbacks.delete(id)};
-const Manager = new Function('GLib', 'Shell', 'St', 'shellSurfaceKind', 'shellSurfaceRole', 'FrostEffect', source + '\nreturn ShellSurfaces;')(
+const Manager = new Function('GLib', 'Shell', 'St', 'shellSurfaceKind', 'shellSurfaceRole', 'FrostEffect', 'surfaceOpacity', 'panelIsDark', source + '\nreturn ShellSurfaces;')(
     loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {isNative = true;}},
     {Label: class {static [Symbol.hasInstance](actor) { return actor.isLabel; }},
         Icon: class {static [Symbol.hasInstance](actor) { return actor.isIcon; }}},
-    shellSurfaceKind, shellSurfaceRole, class {isFrost = true;});
+    shellSurfaceKind, shellSurfaceRole, class {isFrost = true;}, surfaceOpacity, panelIsDark);
 class Actor {
     constructor(classes = '', children = []) {
         this.classes = classes; this.children = children; this.style = 'border-radius: 8px;';
@@ -62,7 +63,8 @@ let active = false, dark = true;
 const values = {'shell-menus': true, 'shell-panel': true, 'shell-dock': false, 'shell-dialogs': false,
     'shell-opacity': 85, 'panel-opacity': 25, 'blur-radius': 36};
 const settings = {get_boolean: key => values[key], get_int: key => values[key], get_string: key => values[key]};
-const manager = new Manager(root, panel, settings, () => dark, () => active);
+let environment = {};
+const manager = new Manager(root, panel, settings, () => dark, () => active, null, () => environment);
 assert(menu.effects.length === 0, 'Global suspension prevents Shell styling');
 active = true; manager.refresh();
 assert(menu.effects.length === 1 && panel.effects.length === 1, 'Enabled surfaces receive blur');
@@ -165,6 +167,20 @@ for (const [id, callback] of [...callbacks]) { callbacks.delete(id); callback();
 assert(dynamic.effects.length === 1, 'Menus created after enable are discovered');
 root.children = root.children.filter(child => child !== dynamic); root.emit('child-removed', dynamic);
 assert(dynamic.effects.length === 0 && dynamic.signals.size === 0, 'Detached actor restored and disconnected');
+values['material-hierarchy'] = true;
+values['glass-edges'] = true;
+values['gentle-transitions'] = true;
+values['wallpaper-panel'] = true;
+environment = {luminance: 1, animations: true};
+manager.refresh();
+assert(dialog.style.includes('rgba(24,27,36,0.93)') && dock.style.includes('rgba(24,27,36,0.75)'), 'Surface hierarchy reaches dialog and dock styling');
+assert(menu.style.includes('border: 1px solid') && menu.style.includes('transition-duration: 140ms'), 'Glass edges and native tint transitions reach menu material');
+assert(!workspaceDot.style.includes('transition-duration:') && !workspaceDot.style.includes('border: 1px'), 'Workspace geometry is untouched by new polish features');
+assert(clock.style.includes('rgb(16,20,26)'), 'Bright wallpaper selects readable dark clock text in dark appearance');
+environment = {luminance: 0, animations: false, lowPower: true, quality: 'eco'};
+manager.refresh();
+assert(clock.style.includes('rgb(246,247,249)') && menu.style.includes('transition-duration: 0ms'), 'Wallpaper changes and reduced motion update panel foreground and stop transitions');
+assert(menu.effects[0].quality === 'eco', 'Comfort quality overrides Shell effects without changing saved settings');
 menu.set_style('external-style: preserved;');
 active = false; manager.refresh();
 assert(menu.style === 'external-style: preserved;', 'Later external inline change survives restoration');
