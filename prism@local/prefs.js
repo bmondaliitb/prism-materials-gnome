@@ -91,7 +91,8 @@ export default class PrismPreferences extends ExtensionPreferences {
             surfaces.add(row);
         }
         for (const [title, key, min, subtitle] of [
-            ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled top bar, menu, dock, and dialog backgrounds.'],
+            ['Top bar background opacity', 'panel-opacity', 0, '25% blends with the background. 0% removes the tint while keeping enabled blur. Clock text and symbolic icons use contrasting foreground colors.'],
+            ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled menu, dock, notification, and dialog backgrounds. The top bar has its own control.'],
             ['Application popup opacity', 'popup-opacity', 75, 'Separate app popup surfaces only; includes their text.'],
         ]) {
             const row = new Adw.SpinRow({title, subtitle,

@@ -25,6 +25,12 @@
   <key name="shell-dock" type="b"><default>false</default></key>
   <key name="shell-dialogs" type="b"><default>false</default></key>
   <key name="shell-opacity" type="i"><default>85</default></key>
+  <key name="panel-opacity" type="i">
+   <range min="0" max="100"/>
+   <default>25</default>
+   <summary>Top bar background opacity</summary>
+   <description>Opacity of the independent neutral top bar material. Does not change menus, dock, or dialogs.</description>
+  </key>
   <key name="popup-opacity" type="i"><default>92</default></key>
   <key name="shell-notifications" type="b"><default>false</default></key>
   <key name="preserve-corners" type="b"><default>true</default></key>

@@ -2,7 +2,13 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 17:** **Stable backdrop redraws** (on by default) disables clipped monitor redraws while live frosted surfaces are visible, addressing remaining hover-triggered patches. Full repaints during updates can cost more GPU bandwidth; Eco remains available. No continuous repaint loop is added. See [rendering notes](docs/PERFORMANCE.md).
+**New in version 20:** panel foreground styling is restricted to actual labels and icons; workspace dots, buttons, and layout widgets retain their native styling. Panel shadows have been removed. The top bar uses GNOME's native background blur instead of the custom rounded shader, avoiding custom clipping of panel controls. Eco caps its native blur radius at 18 px, Balanced at 32 px, and High at 80 px. The independent 25% tint default is retained.
+
+**Version 19:** lowered the top bar default tint to 25% and allowed 0–100%. Previously customized opacity values are preserved; set **Top bar background opacity** to 25% to use the lighter tint.
+
+**Version 18:** introduced an independent neutral top bar material and opacity control. Menus, dock, and dialogs retain their separate Shell opacity.
+
+**Version 17:** **Stable backdrop redraws** (on by default) disables clipped monitor redraws while live frosted surfaces are visible, addressing remaining hover-triggered patches. Full repaints during updates can cost more GPU bandwidth; Eco remains available. No continuous repaint loop is added. See [rendering notes](docs/PERFORMANCE.md).
 
 **Version 16:** hover-triggered refreshes no longer invalidate unchanged window and Shell backdrops. Captures use exact effect bounds so blur does not sample stale pixels from allocation padding.
 

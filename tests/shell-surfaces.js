@@ -6,8 +6,11 @@ const callbacks = new Map(); let sourceId = 0;
 const loop = {PRIORITY_DEFAULT_IDLE: 0, SOURCE_REMOVE: false,
     idle_add: (_priority, callback) => { callbacks.set(++sourceId, callback); return sourceId; },
     source_remove: id => callbacks.delete(id)};
-const Manager = new Function('GLib', 'Shell', 'shellSurfaceKind', 'shellSurfaceRole', 'FrostEffect', source + '\nreturn ShellSurfaces;')(
-    loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {}}, shellSurfaceKind, shellSurfaceRole, class {isFrost = true;});
+const Manager = new Function('GLib', 'Shell', 'St', 'shellSurfaceKind', 'shellSurfaceRole', 'FrostEffect', source + '\nreturn ShellSurfaces;')(
+    loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {isNative = true;}},
+    {Label: class {static [Symbol.hasInstance](actor) { return actor.isLabel; }},
+        Icon: class {static [Symbol.hasInstance](actor) { return actor.isIcon; }}},
+    shellSurfaceKind, shellSurfaceRole, class {isFrost = true;});
 class Actor {
     constructor(classes = '', children = []) {
         this.classes = classes; this.children = children; this.style = 'border-radius: 8px;';
@@ -33,6 +36,17 @@ function assert(value, message) { if (!value) throw new Error(message); }
 const menu = new Actor('popup-menu-content'), text = new Actor('popup-menu-item');
 menu.children.push(text);
 const dock = new Actor('dash-background'), panel = new Actor(), dialog = new Actor('modal-dialog');
+const clock = new Actor('clock-display');
+const trayIcon = new Actor('system-status-icon');
+clock.isLabel = true;
+trayIcon.isIcon = true;
+const panelButton = new Actor('panel-button', [clock, trayIcon]);
+const workspaceDot = new Actor('workspace-dot');
+const workspaceLayout = new Actor('workspace-indicator', [workspaceDot]);
+panelButton.children.push(workspaceLayout);
+const panelPopupLabel = new Actor('popup-menu-item');
+const panelPopup = new Actor('popup-menu-content', [panelPopupLabel]);
+panel.children.push(panelButton, panelPopup);
 const calendar = new Actor('calendar'), calendarCard = new Actor('events-button');
 menu.children.push(calendar, calendarCard);
 const pointer = new Actor('popup-menu-boxpointer popup-menu', [menu]);
@@ -44,15 +58,38 @@ const banner = new Actor('notification-banner', [message]);
 panel.style = 'background-color: #131313 !important;';
 const orphan = new Actor('popup-menu-boxpointer popup-menu', [new Actor('custom-tray-content')]);
 const root = new Actor('', [pointer, orphan, dock, panel, dialog, looseCalendar, banner]);
-let active = false;
+let active = false, dark = true;
 const values = {'shell-menus': true, 'shell-panel': true, 'shell-dock': false, 'shell-dialogs': false,
-    'shell-opacity': 85, 'blur-radius': 36};
+    'shell-opacity': 85, 'panel-opacity': 25, 'blur-radius': 36};
 const settings = {get_boolean: key => values[key], get_int: key => values[key], get_string: key => values[key]};
-const manager = new Manager(root, panel, settings, () => true, () => active);
+const manager = new Manager(root, panel, settings, () => dark, () => active);
 assert(menu.effects.length === 0, 'Global suspension prevents Shell styling');
 active = true; manager.refresh();
 assert(menu.effects.length === 1 && panel.effects.length === 1, 'Enabled surfaces receive blur');
-assert(panel.style.includes('background-color: rgba(24,27,36,0.85) !important;'), 'Panel opacity overrides theme important paint');
+assert(panel.style.includes('background-color: rgba(32,34,38,0.25) !important;'), 'Panel has a light tint that blends with the background');
+assert(panel.effects[0].brightness === 1, 'Panel preserves background brightness');
+assert(panel.effects[0].isNative && !panel.effects[0].isFrost, 'Panel controls are not clipped through the custom rounded shader');
+assert(workspaceDot.style === 'border-radius: 8px;' && workspaceLayout.style === 'border-radius: 8px;' && panelButton.style === 'border-radius: 8px;',
+    'Workspace dots, layout widgets, and buttons keep their native inline styles');
+assert(workspaceDot.effects.length === 0 && workspaceLayout.effects.length === 0, 'Workspace indicator gets no rendering effects');
+assert(clock.style.includes('color: rgb(246,247,249) !important;') && trayIcon.style.includes('color: rgb(246,247,249) !important;'),
+    'Clock and symbolic tray icons use a bright foreground on the dark panel');
+assert(!panelButton.style.includes('background-color:'), 'Panel button hover backgrounds are preserved');
+assert(!panelPopupLabel.style.includes('color:'), 'Panel foreground styling does not leak into popup menu content');
+dark = false; manager.refresh();
+assert(panel.style.includes('rgba(218,222,228,0.25)') && clock.style.includes('rgb(16,20,26)') && trayIcon.style.includes('rgb(16,20,26)'),
+    'Light panel uses neutral gray and dark clock/icon foregrounds');
+const lightMenuStyle = menu.style;
+values['panel-opacity'] = 70; manager.refresh();
+assert(panel.style.includes('rgba(218,222,228,0.7)') && menu.style === lightMenuStyle,
+    'Changing panel opacity does not change menu materials');
+values['panel-opacity'] = 0; manager.refresh();
+assert(panel.style.includes('rgba(218,222,228,0)') && menu.style === lightMenuStyle,
+    'Zero tint is allowed without changing other materials');
+assert(!clock.style.includes('text-shadow:') && !trayIcon.style.includes('icon-shadow:') && !panel.style.includes('shadow:'),
+    'No inherited shadows change panel or workspace paint bounds');
+values['panel-opacity'] = 25;
+dark = true; manager.refresh();
 assert(pointer.style.includes('-arrow-background-color: transparent !important;') && repaints > 0, 'BoxPointer fill cleared and border repainted');
 assert(pointer.effects.length === 0, 'Popup chrome does not duplicate backdrop blur');
 assert(orphan.style.includes('-arrow-background-color: rgba(24,27,36,0.85) !important;'), 'Popup without a recognized content actor keeps its native tinted backing');
@@ -78,8 +115,8 @@ for (const [id, callback] of [...callbacks]) { callbacks.delete(id); callback();
 assert([menu.redraws, panel.redraws, banner.redraws].join() === hoverRedraws.join(),
     'Hover refresh does not invalidate unchanged backdrops across the desktop');
 values['blur-radius'] = 40; manager.refresh();
-assert(menu.redraws === hoverRedraws[0] + 1 && panel.redraws === hoverRedraws[1] + 1,
-    'Real blur parameter changes invalidate each affected backdrop once');
+assert(menu.redraws === hoverRedraws[0] + 1 && panel.redraws === hoverRedraws[1] && panel.effects[0].radius === 18,
+    'Real blur changes repaint menus while Eco panel remains at its native radius cap');
 for (const [id, callback] of [...callbacks]) { callbacks.delete(id); callback(); }
 text.emit('style-changed');
 assert(callbacks.size === 0, 'Menu-row hover does not schedule a global rescan');
@@ -111,7 +148,7 @@ assert(menu.effects.length === 1, 'Square theme shape can safely restore blur');
 values['render-quality'] = 'off'; manager.refresh();
 assert(menu.effects.length === 0 && panel.effects.length === 0 && menu.style.includes('rgba('), 'No-blur mode removes all capture effects but keeps tint');
 values['render-quality'] = 'eco'; manager.refresh();
-assert(menu.effects[0].quality === 'eco' && panel.effects[0].quality === 'eco', 'Eco applies to square panel and menu surfaces');
+assert(menu.effects[0].quality === 'eco' && panel.effects[0].isNative && panel.effects[0].radius === 18, 'Eco applies a bounded blur to menus and native panel');
 values['render-quality'] = 'high'; manager.refresh();
 assert(menu.effects[0].quality === 'high', 'Live rendering-level change reaches the effect');
 const getTheme = menu.get_theme_node;
@@ -132,10 +169,11 @@ menu.set_style('external-style: preserved;');
 active = false; manager.refresh();
 assert(menu.style === 'external-style: preserved;', 'Later external inline change survives restoration');
 assert(panel.style === 'background-color: #131313 !important;' && panel.effects.length === 0, 'Suspension restores owned style and removes effects');
+assert(clock.style === 'border-radius: 8px;' && trayIcon.style === 'border-radius: 8px;', 'Suspension restores original clock and tray styling');
 active = true; manager.refresh();
 root.emit('child-added', dynamic); // schedule a pending rescan for disable to cancel
 manager.destroy();
 assert(callbacks.size === 0, 'Disable cancels pending work');
-for (const actor of [root, pointer, orphan, ...orphan.children, lateContent, menu, text, calendar, calendarCard, looseCalendar, banner, message, dock, panel, dialog, dynamic])
+for (const actor of [root, pointer, orphan, ...orphan.children, lateContent, menu, text, calendar, calendarCard, looseCalendar, banner, message, dock, panel, panelButton, workspaceLayout, workspaceDot, clock, trayIcon, panelPopup, panelPopupLabel, dialog, dynamic])
     assert(actor.signals.size === 0 && actor.effects.length === 0, 'Disable releases actors and handlers');
 print('Shell surface lifecycle and corner/panel/calendar/tray layer regression checks passed');
