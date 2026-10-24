@@ -18,6 +18,7 @@ import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
 import {ShellSurfaces} from './shellSurfaces.js';
 import {Experience} from './experience.js';
 import {OverviewMaterial} from './overviewMaterial.js';
+import {LockMaterial} from './lockMaterial.js';
 
 export default class Prism extends Extension {
     enable() {
@@ -38,6 +39,7 @@ export default class Prism extends Extension {
         this._button.menu.addMenuItem(this._toggle);
         this._button.menu.addAction('Toggle for focused app', () => this._toggleApp());
         this._button.menu.addAction('Material settings', async () => {
+            if (Main.sessionMode.isLocked) return;
             try { await this.openPreferences(); }
             catch (error) { console.error('Prism: could not open preferences', error); }
         });
@@ -67,6 +69,10 @@ export default class Prism extends Extension {
         this._overviewMaterial = new OverviewMaterial(Main.layoutManager, this._settings,
             () => this._settings.get_boolean('enabled') && !this._reduced() && !Main.sessionMode.isLocked,
             () => this._context());
+        this._lockMaterial = new LockMaterial(Main.screenShield, this._settings,
+            () => this._settings.get_boolean('enabled') && !this._reduced() && Main.sessionMode.isLocked,
+            () => this._context());
+        this._button.visible = !Main.sessionMode.isLocked;
         for (const actor of global.get_window_actors())
             this._watch(actor);
         this._syncGtkMenus();
@@ -133,10 +139,15 @@ export default class Prism extends Extension {
     }
 
     _refresh(shell = true) {
+        if (this._button) {
+            this._button.visible = !Main.sessionMode.isLocked;
+            if (Main.sessionMode.isLocked) this._button.menu.close();
+        }
         this._syncWorkspaceMotion();
         this._redrawGuard?.setEnabled(this._settings.get_boolean('stable-redraws'));
         if (shell) this._shellSurfaces?.refresh();
         this._overviewMaterial?.refresh();
+        this._lockMaterial?.refresh();
         for (const [actor, state] of this._windows) this._update(actor, state);
     }
 
@@ -315,6 +326,8 @@ export default class Prism extends Extension {
         this._gtkMenus = null;
         this._overviewMaterial?.destroy();
         this._overviewMaterial = null;
+        this._lockMaterial?.destroy();
+        this._lockMaterial = null;
         this._shellSurfaces?.destroy();
         this._shellSurfaces = null;
         for (const [object, id] of this._connections) object.disconnect(id);

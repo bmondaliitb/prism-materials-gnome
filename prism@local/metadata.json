@@ -6,5 +6,6 @@
     "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.prism",
-  "version": 27
+  "session-modes": ["user", "unlock-dialog"],
+  "version": 30
 }

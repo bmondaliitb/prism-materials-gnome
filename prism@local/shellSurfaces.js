@@ -71,7 +71,11 @@ export class ShellSurfaces {
         this._redrawGuard?.untrack(actor);
         if (saved.effect) actor.remove_effect(saved.effect);
         // Preserve an external extension's later inline change, if there is one.
-        if (actor.get_style() === saved.appliedStyle) actor.set_style(saved.style);
+        if (actor.get_style() === saved.appliedStyle) {
+            this._settingStyle = true;
+            try { actor.set_style(saved.style); }
+            finally { this._settingStyle = false; }
+        }
         this._applied.delete(actor);
         actor._border?.queue_repaint?.();
     }
@@ -103,6 +107,18 @@ export class ShellSurfaces {
         const role = shellSurfaceRole(classes);
         const kind = shellSurfaceKind(classes);
         if (role === 'pointer') return {kind, role: this._hasMenuSurface(actor) ? 'pointer' : 'pointer-fill'};
+        if (kind === 'menus' && classes.split(/\s+/).includes('popup-sub-menu')) {
+            // Expanding rows live inside an already painted menu. A second
+            // material there compounds opacity and repeats the blur pass.
+            // A BoxPointer boundary starts a separate floating popup instead.
+            for (let parent = this._parents.get(actor); parent; parent = this._parents.get(parent)) {
+                const parentClasses = parent.get_style_class_name?.() ?? '';
+                const parentRole = shellSurfaceRole(parentClasses);
+                if (parentRole === 'pointer') break;
+                if (shellSurfaceKind(parentClasses) === 'menus' && parentRole === 'surface')
+                    return {kind, role: 'inset'};
+            }
+        }
         if (kind) return {kind, role};
         // Color actual text/icons only. Workspace dots and layout/drawing
         // widgets rely on their native theme geometry and must stay untouched.
@@ -173,7 +189,9 @@ export class ShellSurfaces {
             const safe = this._settings.get_boolean('preserve-corners');
             const rounded = radii?.some(radius => radius > 0);
             const quality = context.quality ?? this._settings.get_string('render-quality') ?? 'eco';
-            const type = role !== 'surface' || quality === 'off' ? null
+            // Short-lived switchers, OSDs and tooltips use native rounded tint
+            // only. Never capture/filter the desktop for these overlays.
+            const type = role !== 'surface' || kind === 'overlays' || quality === 'off' ? null
                 : kind === 'panel' ? (this._settings.get_boolean('panel-blur') && (!safe || (radii && !rounded)) ? 'native-panel' : null)
                 : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
                 : (!safe || (radii && !rounded)) ? 'frost' : null;
@@ -211,16 +229,21 @@ export class ShellSurfaces {
             // BoxPointer paints its own Cairo background beneath popup-menu-content.
             const materialAlpha = surfaceOpacity(kind, alpha, this._settings.get_boolean('material-hierarchy'));
             const background = role === 'surface'
-                ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})` : `rgba(${tint},${materialAlpha})`) : 'transparent';
+                ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})`
+                    : `rgba(${kind === 'overlays' ? '25,28,35' : tint},${materialAlpha})`) : 'transparent';
             const pointer = role === 'pointer' ? '-arrow-background-color: transparent !important;'
                 : role === 'pointer-fill' ? `-arrow-background-color: rgba(${tint},${materialAlpha}) !important;` : '';
             const base = saved.style?.trim() ?? '';
-            const foreground = role === 'foreground' ? `color: rgb(${panelForeground}) !important;` : '';
+            // Native OSD levels and switcher rows use a light foreground even
+            // in light mode; keep their backing dark and their colors intact.
+            const foreground = role === 'foreground' ? `color: rgb(${panelForeground}) !important;`
+                : kind === 'overlays' ? 'color: rgb(242,242,242) !important;' : '';
             const fill = role === 'foreground' ? ''
                 : `background-image: none !important; background-color: ${background} !important; ${pointer}`;
             const edge = role === 'surface' && kind !== 'panel' && this._settings.get_boolean('glass-edges')
-                ? `border: 1px solid rgba(${dark ? '255,255,255,0.18' : '255,255,255,0.5'});` : '';
-            const transition = role === 'surface' ? `transition-duration: ${this._settings.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower ? 140 : 0}ms;` : '';
+                && kind !== 'overlays'
+                ? `border-color: rgba(${dark ? '255,255,255,0.18' : '255,255,255,0.5'});` : '';
+            const transition = role === 'surface' && kind !== 'overlays' ? `transition-duration: ${this._settings.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower ? 140 : 0}ms;` : '';
             saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge} ${transition}`;
             if (actor.get_style() !== saved.appliedStyle) {
                 this._settingStyle = true;

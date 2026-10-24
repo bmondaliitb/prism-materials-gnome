@@ -1,0 +1,8 @@
+{
+  "uuid": "prism-login@local",
+  "name": "Prism Login Material",
+  "description": "Translucent password card for the system GDM greeter. Installed separately by the Prism login installer.",
+  "shell-version": ["50"],
+  "session-modes": ["gdm"],
+  "version": 1
+}

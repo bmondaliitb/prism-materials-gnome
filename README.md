@@ -2,7 +2,13 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 27:** overview search-result boxes now use a dark translucent material with translucent hover, selection, and pressed highlights. They share the overview wallpaper blur without adding per-result capture or blur effects.
+**New in version 30:** a material consistency audit removes stacked blur/tint in inline submenus, preserves native Shell border geometry, makes Glass edges off remove app highlights, dims disabled search details/icons consistently, and fixes restoration after a lock-screen blur effect is replaced. See [audit findings](docs/MATERIAL-AUDIT.md).
+
+**Version 29:** the lock screen keeps your desktop wallpaper clear at the clock and shows a translucent password card over bounded native wallpaper blur. An optional Ubuntu GDM installer prepares the same wallpaper and card for the boot/logout login screen. See [setup and undo](docs/LOGIN.md).
+
+**Version 28:** matching materials for Alt+Tab, volume/brightness indicators, standard Shell tooltips, the overview search field, and app folders. **Lightweight Shell overlays** defaults on and uses tint only, without adding blur or desktop capture. Overview additions share the existing wallpaper backdrop.
+
+**Version 27:** overview search-result boxes now use a dark translucent material with translucent hover, selection, and pressed highlights. They share the overview wallpaper blur without adding per-result capture or blur effects.
 
 **Version 26:** the Meta-key overview gains a translucent wallpaper material, enabled by default, with separate **Overview wallpaper blur** and **Overview background opacity** controls. Only wallpaper actors are blurred using native cached actor blur; search, app labels, and previews remain crisp. See [overview behavior](docs/OVERVIEW.md).
 
@@ -69,7 +75,7 @@ gnome-extensions disable prism@local
 gnome-extensions uninstall prism@local
 ```
 
-Disable restores saved surface opacity and removes material actors and signal handlers. No system files are edited. The optional Match GTK4 app menus feature adds a managed block to your user GTK4 stylesheet; existing customizations are preserved.
+Disable restores saved surface opacity and removes material actors and signal handlers. The desktop extension edits no system files. The optional Match GTK4 app menus feature adds a managed block to your user GTK4 stylesheet; existing customizations are preserved. The separately installed GDM companion has its own [system installer and undo command](docs/LOGIN.md).
 
 ## Development
 

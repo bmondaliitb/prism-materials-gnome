@@ -89,7 +89,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         const applyEverywhere = new Gtk.Button({label: 'Apply', valign: Gtk.Align.CENTER});
         applyEverywhere.connect('clicked', () => {
             for (const key of ['enabled', 'all-applications', 'force-translucency', 'window-dialogs',
-                'window-popups', 'shell-menus', 'shell-panel', 'shell-dock', 'shell-dialogs', 'shell-notifications', 'gtk-menus', 'overview-material'])
+                'window-popups', 'shell-menus', 'shell-panel', 'shell-dock', 'shell-dialogs', 'shell-notifications', 'shell-overlays', 'gtk-menus', 'overview-material'])
                 settings.set_boolean(key, true);
             settings.set_boolean('sidebar-materials', false);
             settings.set_boolean('focused-only', false);
@@ -104,11 +104,13 @@ export default class PrismPreferences extends ExtensionPreferences {
             ['Shell menus and popups', 'Right-click menus, panel menus, calendar, and Quick Settings using standard Shell menu backgrounds.', 'shell-menus'],
             ['Top bar', 'GNOME panel background; labels and indicators remain opaque.', 'shell-panel'],
             ['Top bar blur', 'Turn off to keep its neutral translucency without a permanently active background blur. Useful on 4K displays.', 'panel-blur'],
-            ['Overview material', 'Shows wallpaper through a translucent veil and search-result boxes when pressing Meta. Text, icons, and window previews stay crisp.', 'overview-material'],
+            ['Overview material', 'Translucent wallpaper, search field, search-result boxes, and app folders when pressing Meta. Text, icons, and window previews stay crisp.', 'overview-material'],
             ['Overview wallpaper blur', 'Cached blur of the wallpaper only, avoiding live desktop capture. Respects rendering quality and Translucency only.', 'overview-blur'],
+            ['Lock screen material', 'Your desktop wallpaper stays clear at the clock. The password panel becomes translucent over a modest wallpaper blur. The boot login screen requires the separate system installer.', 'lock-material'],
             ['Dash and dock', 'Standard dash backgrounds, including Ubuntu Dock and Dash to Dock when they use the standard class.', 'shell-dock'],
             ['Notification banners and tray', 'Notification banner backgrounds and their nested message cards.', 'shell-notifications'],
             ['Shell dialogs', 'Standard GNOME modal dialog backgrounds.', 'shell-dialogs'],
+            ['Lightweight Shell overlays', 'Alt+Tab, volume and brightness indicators, and standard Shell tooltips. Tint only, with no additional blur or desktop capture.', 'shell-overlays'],
         ]) {
             const row = new Adw.SwitchRow({title, subtitle});
             settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
@@ -117,7 +119,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         for (const [title, key, min, subtitle] of [
             ['Overview background opacity', 'overview-opacity', 0, '35% recommended. Controls the dark neutral veil over the wallpaper; lower values reveal more wallpaper.'],
             ['Top bar background opacity', 'panel-opacity', 0, '25% blends with the background. 0% removes the tint while keeping enabled blur. Clock text and symbolic icons use contrasting foreground colors.'],
-            ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled menu, dock, notification, and dialog backgrounds. The top bar has its own control.'],
+            ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled menu, dock, notification, dialog, and lightweight overlay backgrounds. The top bar has its own control.'],
             ['Application popup opacity', 'popup-opacity', 75, 'Separate app popups only. With frost, adjusts translucent fills while preserving opaque labels; without frost, fades the whole popup including text.'],
         ]) {
             const row = new Adw.SpinRow({title, subtitle,

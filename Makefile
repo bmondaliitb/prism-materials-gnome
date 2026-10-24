@@ -13,13 +13,17 @@ check:
 	gjs tools/check-syntax.js $(UUID)/redrawGuard.js
 	gjs tools/check-syntax.js $(UUID)/experience.js
 	gjs tools/check-syntax.js $(UUID)/overviewMaterial.js
+	gjs tools/check-syntax.js $(UUID)/lockMaterial.js
+	gjs tools/check-syntax.js integration/login/extension.js
 	gjs -m tests/experience.js
 	gjs -m tests/overview.js
+	gjs -m tests/lock.js
+	/usr/bin/python3 -B tests/login-installer.py
 	/usr/bin/python3 tests/gtk-menu-css.py
 package: check
 	glib-compile-schemas --strict $(UUID)/schemas
 	mkdir -p dist
-	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json stylesheet.css extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js experience.js overviewMaterial.js schemas
+	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json stylesheet.css extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js experience.js overviewMaterial.js lockMaterial.js schemas
 
 .PHONY: adapter
 adapter:

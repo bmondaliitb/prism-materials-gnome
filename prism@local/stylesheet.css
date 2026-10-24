@@ -8,6 +8,38 @@
     color: #f2f2f2;
 }
 
+/* Keep the native entry outline/focus ring and folder radius/layout. These
+ * surfaces reveal the same overview backdrop; no additional blur is needed. */
+.prism-overview-material .search-entry {
+    background-color: rgba(25, 28, 35, 0.60);
+    background-image: none;
+    color: #f2f2f2;
+}
+
+.prism-overview-material .search-entry:hover {
+    background-color: rgba(25, 28, 35, 0.68);
+}
+
+.prism-overview-material .search-entry:focus {
+    background-color: rgba(25, 28, 35, 0.76);
+}
+
+.prism-overview-material .search-entry:insensitive {
+    background-color: rgba(25, 28, 35, 0.48);
+    color: rgba(242, 242, 242, 0.4);
+}
+
+.prism-overview-material .search-entry StLabel.hint-text,
+.prism-overview-material .search-entry .search-entry-icon {
+    color: rgba(242, 242, 242, 0.78);
+}
+
+.prism-overview-material .app-folder-dialog {
+    background-color: rgba(25, 28, 35, 0.70);
+    background-image: none;
+    color: #f2f2f2;
+}
+
 .prism-overview-material .list-search-result,
 .prism-overview-material .search-provider-icon,
 .prism-overview-material .grid-search-result {
@@ -50,5 +82,11 @@
 .prism-overview-material .search-provider-icon:insensitive,
 .prism-overview-material .grid-search-result:insensitive {
     background-color: transparent;
+    color: rgba(242, 242, 242, 0.4);
+}
+
+.prism-overview-material .list-search-result:insensitive .list-search-result-description,
+.prism-overview-material .search-entry:insensitive StLabel.hint-text,
+.prism-overview-material .search-entry:insensitive .search-entry-icon {
     color: rgba(242, 242, 242, 0.4);
 }

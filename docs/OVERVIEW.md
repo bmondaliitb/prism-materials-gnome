@@ -1,4 +1,4 @@
-# Overview material (version 27)
+# Overview material (version 28)
 
 Overview material defaults on. Pressing Meta reveals wallpaper beneath a dark neutral translucent veil. Default Overview background opacity is 35%, adjustable from 0–100%. A moderate wallpaper brightness is retained for GNOME's native light overview labels; changing veil opacity does not change label or preview opacity. This shows the wallpaper, not live desktop windows behind the overview (GNOME hides its normal window group there).
 
@@ -7,5 +7,7 @@ Overview wallpaper blur defaults on and uses Shell.BlurEffect in ACTOR mode on t
 Wallpaper resources are created lazily on the first overview opening, separately for each monitor using GNOME's BackgroundManager. They are reused across hide/show, follow wallpaper changes, and rebuild on monitor changes. Animated wallpapers can invalidate the cached blur as they change, and the initial blur can still cost time on a 4K monitor. The decorative layer cannot receive clicks or keyboard focus. App controls, workspace previews, and overview animation remain unchanged.
 
 Version 27 adds dark translucent search provider boxes (60% neutral tint), including results created dynamically while typing. Hover, selection, and pressed backgrounds stay translucent; native keyboard focus rings, rounded geometry, text/icon opacity, and activation behavior are retained. The stylesheet is scoped to a class owned on the overview root, so desktop menus and app grids outside search are unaffected. Search boxes share the already blurred wallpaper; no extra background capture, per-result blur, timer, or actor tracking is added. Overview material off or reduced transparency removes the scope and restores native search styling. With overview blur disabled, the boxes remain translucent over the unblurred wallpaper.
+
+Version 28 extends the same scope to the overview search field and opened app-folder dialogs. Search uses a 60% dark fill, increasing to 68% on hover and 76% on focus, with the native focus ring retained. App folders use 70% dark fill and retain their native rounding, modal shade, name editing, and app interaction. Only background colors change; there is no additional blur or capture on either surface. Both follow Overview material and automatically revert with it. App-folder icons in the main grid retain their native styling.
 
 Disabling Overview material, global materials, or enabling Reduce transparency/system high contrast restores the original overview background and destroys owned resources. Tests cover background ordering, independent veil opacity, cached actor blur mode, quality-off, multi-monitor lifecycle, untouched controls, and cleanup. Live overview rendering is unverified in this workspace.

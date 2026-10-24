@@ -1,5 +1,13 @@
 # Window and Shell translucency settings
 
+## Lightweight overlays (version 28)
+
+**Lightweight Shell overlays** defaults on and applies dark neutral translucent backing to standard Alt+Tab/window switcher containers (`switcher-list`), volume/brightness/microphone OSDs (`osd-window`), dash labels, screenshot tooltips, and widgets using the standard `tooltip` class. It follows **Shell background opacity** (default 85%). The backing remains dark in light appearance because GNOME's switcher items and OSD levels use light foregrounds.
+
+These overlays always use tint only, including at High rendering quality. They allocate no blur effect or desktop capture and do not activate Prism's full-redraw guard. Native rounded corners, borders, selection highlights, level bars, layout, and animation timing remain unchanged. The existing event-driven discovery handles overlays created after enable. The independent preference, Reduce transparency, automatic high-contrast handling, global disable, and extension disable restore owned styles. Tooltips painted by apps or third-party extensions with different classes are outside this switch's scope.
+
+Overview search fields and opened app folders follow **Overview material**, sharing its background without extra filtering; see [overview behavior](OVERVIEW.md). Tests cover dynamic switchers, no effects across quality levels, light-mode backing, untouched foreground controls, independent opt-out, accessibility suspension, and cleanup. Native CSS parsing passes; live desktop appearance remains unverified.
+
 Version 6 refines the controls introduced in version 5 in the **Windows and desktop surfaces** section in Prism preferences. New scope/category switches default off, so upgrading does not automatically change more of your desktop.
 
 ## Quick setup
@@ -41,7 +49,7 @@ The existing **Window opacity** applies to whole app surfaces when Whole-window 
 
 An app-rendered menubar or Wayland popover may be part of its parent window or a subsurface that is not exposed as a separate `Meta.WindowActor`. The popup switch cannot target those independently. Whole-window fading affects them as part of the window. The Shell surface manager does not inject CSS into application toolkits.
 
-Desktop backgrounds, drag-and-drop actors, unknown window types, lock/login surfaces, and nonstandard third-party dock/menu backgrounds are excluded. Fullscreen/minimized app windows remain excluded. Standard Shell menus and the dash can remain styled in the overview; application-window blur is suspended there.
+Desktop backgrounds, drag-and-drop actors, unknown window types, and nonstandard third-party dock/menu backgrounds are excluded from the general surface manager. Version 29 adds separate [lock/login material components](LOGIN.md); the general desktop materials remain suspended while locked. Fullscreen/minimized app windows remain excluded. Standard Shell menus and the dash can remain styled in the overview; application-window blur is suspended there.
 
 The Shell manager watches actor additions/removals and style-class changes, with coalesced idle rescans. It covers newly created menus and standard dock actors without a polling loop or patching Shell menu prototypes. It saves inline styles and adds its own blur effect. Disabling a category, the global switch, Reduce transparency, locking, or disabling the extension removes owned effects and restores owned styles. Later inline changes by another extension are preserved at restoration when detected. Simultaneous theme/dock extensions may still conflict and require live testing.
 

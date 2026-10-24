@@ -20,6 +20,7 @@
   <key name="backdrop-fps" type="i"><range min="0" max="60"/><default>30</default></key>
   <key name="panel-blur" type="b"><default>true</default></key>
   <key name="overview-material" type="b"><default>true</default></key>
+  <key name="lock-material" type="b"><default>true</default></key>
   <key name="overview-blur" type="b"><default>true</default></key>
   <key name="overview-opacity" type="i"><range min="0" max="100"/><default>35</default></key>
   <key name="stable-redraws" type="b"><default>true</default></key>
@@ -37,6 +38,11 @@
   <key name="shell-panel" type="b"><default>false</default></key>
   <key name="shell-dock" type="b"><default>false</default></key>
   <key name="shell-dialogs" type="b"><default>false</default></key>
+  <key name="shell-overlays" type="b">
+   <default>true</default>
+   <summary>Lightweight Shell overlays</summary>
+   <description>Dark translucent Alt+Tab switchers, volume and brightness indicators, and standard Shell tooltips. Uses tint only without extra blur or desktop capture.</description>
+  </key>
   <key name="shell-opacity" type="i"><default>85</default></key>
   <key name="panel-opacity" type="i">
    <range min="0" max="100"/>
