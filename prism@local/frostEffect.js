@@ -55,10 +55,9 @@ class FrostEffect extends Shell.GLSLEffect {
             const capture = framebufferCapture(source, width, height);
             if (!capture) return false;
             const {rect} = capture;
-            // Small resize steps reuse storage instead of allocating large textures
-            // on every motion event. Extra pixels are real backdrop, never garbage.
-            rect.width = Math.min(source.get_width() - rect.x, Math.ceil(rect.width / 64) * 64);
-            rect.height = Math.min(source.get_height() - rect.y, Math.ceil(rect.height / 64) * 64);
+            // Capture only the effect's bounds. Allocation padding can reach
+            // outside the region repainted by Mutter; filtering those pixels
+            // leaks stale framebuffer tiles into an otherwise current backdrop.
             if (!this._texture || this._texture.get_width() !== rect.width || this._texture.get_height() !== rect.height) {
                 this._texture = Cogl.Texture2D.new_with_size(source.get_context(), rect.width, rect.height);
                 this._framebuffer = Cogl.Offscreen.new_with_texture(this._texture);

@@ -5,11 +5,12 @@ const [, bytes] = GLib.file_get_contents('prism@local/extension.js');
 const source = new TextDecoder().decode(bytes).replace(/^import .*;\n/gm, '').replace('export default class Prism', 'class Prism');
 let destroyed = 0;
 class Widget {
-    constructor(properties) { this.properties = properties; }
+    constructor(properties) { this.properties = properties; this.redraws = 0; }
     add_effect(effect) { this.effect = effect; }
     set_position(x, y) { this.position = [x, y]; }
     set_size(w, h) { this.size = [w, h]; }
     set_style(style) { this.style = style; }
+    queue_redraw() { this.redraws++; }
     destroy() { destroyed++; }
 }
 let windowType = 0;
@@ -43,6 +44,7 @@ assert(actor.effects.length === 1, 'Window actor receives a culling guard while 
 assert(!state.layer.properties.reactive && !state.layer.properties.can_focus && !state.layer.properties.track_hover, 'Backdrop cannot receive clicks, keyboard focus, or hover');
 extension._update(actor, state);
 assert(surface.opacity === 221, 'Repeated updates must not accumulate fading');
+assert(state.layer.redraws === 1, 'Repeated window refresh does not invalidate unchanged frost');
 values['force-translucency'] = false;
 extension._update(actor, state);
 assert(surface.opacity === 240, 'Disabling forced translucency restores original alpha');

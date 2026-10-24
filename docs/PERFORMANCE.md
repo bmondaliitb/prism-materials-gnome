@@ -1,3 +1,21 @@
+# Version 17: stable backdrop redraws
+
+The earlier window-level culling guard does not disable monitor-level clipped redraws. The remaining hover patches are consistent with reading pixels outside the current monitor damage clip. Version 17 adds **Comfort and behavior → Stable backdrop redraws**, enabled by default, as a compatibility workaround.
+
+While at least one Prism frosted actor is mapped, the mode enables Clutter's `DISABLE_CLIPPED_REDRAWS` draw flag. Frames repaint completely instead of combining partial redraws with old composited framebuffer tiles. No animation timer, idle repaint loop, or continuous-redraw flag is used. Changing guard state queues a single full redraw to clear existing patches. Switching off blur, hiding the last frosted actor, disabling this setting, or disabling Prism releases the flag if Prism set it. Pre-existing and unrelated flags are preserved. Draw flags are process-global; extensions independently changing this same flag while Prism owns it cannot be coordinated by Clutter's non-reference-counted API.
+
+This affects all monitors while active and can increase GPU bandwidth on updates, especially for a permanently frosted top panel. Eco limits blur filtering cost but does not remove the cost of full repaints. Turn this setting off to restore damage clipping, or select Translucency only to avoid capture entirely. There is no change to pointer picking or window input regions.
+
+Lifecycle tests verify mapped/hidden actors, multiple surfaces, no repeated repaint requests, live setting changes, disable cleanup, and preservation of existing flags. Runtime checks confirm the required API exists. Live hover rendering remains unverified here; this workaround addresses the partial-frame sampling path rather than claiming all possible compositor artifacts are eliminated.
+
+# Version 16: hover redraw improvements
+
+Hover/theme notifications previously queued redraws on all styled Shell surfaces even when no material parameter changed. Window refreshes similarly invalidated their backdrop unconditionally. Version 16 compares the material parameters before explicitly queuing redraws. Native hover painting and live backdrop capture on compositor paints remain active.
+
+Version 16 also removes the 64-pixel capture expansion introduced in version 13. Pixels outside the actual effect bounds may not have been repainted in the current frame, so including them in the blur can introduce stale colors or visible redraw patches near edges. Captures now use their exact bounds. Stable geometry still reuses textures; resizing may allocate more often, a tradeoff for sampling valid bounds.
+
+Regression tests cover hover notifications without unrelated material invalidation, parameter changes that still repaint, and capture bounds without extra padding. Shader and runtime API checks also pass. Live GNOME hover behavior has not been reproduced or verified from this workspace.
+
 # Version 14: selectable rendering levels
 
 Version 15 adds a lightweight effect to each top-level window actor while its live frost capture is active. Mutter's culling pass treats actors with effects as backdrop-dependent and avoids propagating partial redraw clips through them. This prevents old framebuffer tiles appearing as dark square trails after windows move or update. The guard does no drawing and creates no framebuffer; it does require Mutter to repaint the obscured content needed by the blur. It is removed with the frost effect and is never installed in Translucency-only mode.
@@ -29,7 +47,7 @@ The new renderer captures the live backdrop, downsamples in two stages, and appl
 
 At 4× reduction, the four preparation passes plus final backdrop lookup use approximately 3.375 texture samples per full-size pixel, compared with 48 previously. This is a work-count estimate, **not a measured desktop speedup**. Framebuffer copies, foreground painting, driver overhead, and other extensions still cost time. Rounded frost retains live updates; it does not freeze or throttle the background. Its texture is deliberately softer at small radii because of downsampling; radius zero bypasses the filters.
 
-Capture storage is rounded to 64-pixel allocation increments where the framebuffer permits, avoiding repeated large allocations during small resize steps. Extra captured pixels contain valid background. Filter targets and pipelines are reused, and final shader uniform locations are cached.
+Version 13 rounded capture storage to 64-pixel increments to reduce allocations during resizing. Version 16 removes this expansion because pixels outside the effect bounds can be stale during partial redraws. Filter targets and pipelines are reused, and final shader uniform locations are cached.
 
 Other fixes:
 

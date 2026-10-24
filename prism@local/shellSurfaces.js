@@ -4,7 +4,8 @@ import {shellSurfaceKind, shellSurfaceRole} from './materials.js';
 
 // Event-driven discovery also covers menus/docks created after Prism is enabled.
 export class ShellSurfaces {
-    constructor(root, panel, settings, isDark, permitted) {
+    constructor(root, panel, settings, isDark, permitted, redrawGuard = null) {
+        this._redrawGuard = redrawGuard;
         this._settings = settings;
         this._panel = panel;
         this._isDark = isDark;
@@ -63,6 +64,7 @@ export class ShellSurfaces {
     _restore(actor) {
         const saved = this._applied.get(actor);
         if (!saved) return;
+        this._redrawGuard?.untrack(actor);
         if (saved.effect) actor.remove_effect(saved.effect);
         // Preserve an external extension's later inline change, if there is one.
         if (actor.get_style() === saved.appliedStyle) actor.set_style(saved.style);
@@ -152,6 +154,7 @@ export class ShellSurfaces {
                 if (saved.effect) actor.remove_effect(saved.effect);
                 saved.effect = type === 'frost' ? new FrostEffect() : null;
                 saved.type = type;
+                saved.paintKey = null;
                 if (saved.effect) actor.add_effect(saved.effect);
             }
             if (type === 'frost') {
@@ -161,8 +164,16 @@ export class ShellSurfaces {
             if (saved.effect) {
                 saved.effect.radius = Math.max(0, Math.min(80, this._settings.get_int('blur-radius')));
                 saved.effect.brightness = dark ? 0.85 : 1;
-                actor.queue_redraw?.();
+                const paintKey = JSON.stringify([saved.effect.radius, saved.effect.brightness,
+                    saved.effect.radii, quality]);
+                // A hover/theme notification may reach refresh without changing
+                // the material. It must not invalidate every other backdrop.
+                if (saved.paintKey !== paintKey) {
+                    saved.paintKey = paintKey;
+                    actor.queue_redraw?.();
+                }
             }
+            this._redrawGuard?.track(actor, Boolean(saved.effect));
             // Theme !important rules (notably Yaru #panel) otherwise keep opaque paint.
             // BoxPointer paints its own Cairo background beneath popup-menu-content.
             const background = role === 'surface' ? `rgba(${tint},${alpha})` : 'transparent';

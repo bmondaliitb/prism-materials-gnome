@@ -72,7 +72,8 @@ assert(effect._blurBuffer !== oldBlurBuffer && effect._blurBuffer.quality === 'h
 assert(effect._texture === originalTexture, 'Rendering-level changes reuse full-size capture storage');
 effect._actor.get_size = () => [101,81];
 effect.vfunc_pre_paint(null, context);
-assert(effect._texture === originalTexture, 'Small live resize reuses capture storage');
+assert(effect._texture.get_width() === effect._capture.rect.width && effect._capture.rect.width < 128,
+    'Capture excludes allocation padding that Mutter may not have repainted');
 effect._actor.get_size = () => [100,80];
 effect.vfunc_paint(null, context, 0);
 assert(originalCalls === 2, 'Parent paint pipeline preserved');

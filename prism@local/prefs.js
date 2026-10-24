@@ -48,6 +48,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         const behavior = new Adw.PreferencesGroup({title: 'Comfort and behavior'});
         page.add(behavior);
         for (const [title, subtitle, key] of [
+            ['Stable backdrop redraws', 'Prevents partial-redraw patches while frosted surfaces are visible. Repaints full monitor frames on updates, which can use more GPU power. No continuous repainting.', 'stable-redraws'],
             ['Preserve native rounded corners', 'Keeps material inside rounded boundaries. Disable Rounded frosted glass below to fall back to clear translucency.', 'preserve-corners'],
             ['Rounded frosted glass', 'Experimental GPU blur with rounded clipping for Shell surfaces and app backdrops. Capture failures fall back to translucency. GTK item menus use matched styling, without their own blur.', 'rounded-frost'],
             ['Sidebar-only materials', 'Keeps every selected app at full opacity. The Prism launcher detects supported GTK4 sidebars; unknown layouts stay unchanged.', 'sidebar-materials'],

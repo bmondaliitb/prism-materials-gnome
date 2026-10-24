@@ -10,6 +10,7 @@
    <description>Eco reduces blur texture size and samples. Off keeps translucency without backdrop capture or blur.</description>
   </key>
   <key name="blur-radius" type="i"><default>36</default></key>
+  <key name="stable-redraws" type="b"><default>true</default></key>
   <key name="translucency" type="i"><default>92</default></key>
   <key name="force-translucency" type="b"><default>false</default></key>
   <key name="focused-only" type="b"><default>true</default></key>

@@ -12,6 +12,7 @@ class Actor {
     constructor(classes = '', children = []) {
         this.classes = classes; this.children = children; this.style = 'border-radius: 8px;';
         this.radii = [0, 0, 0, 0];
+        this.redraws = 0;
         this.effects = []; this.signals = new Map(); this.next = 0;
     }
     connect(signal, callback) { this.signals.set(++this.next, [signal, callback]); return this.next; }
@@ -26,6 +27,7 @@ class Actor {
     set_style(value) { this.style = value; this.emit('notify::style'); this.emit('style-changed'); }
     add_effect(effect) { this.effects.push(effect); }
     remove_effect(effect) { this.effects = this.effects.filter(item => item !== effect); }
+    queue_redraw() { this.redraws++; }
 }
 function assert(value, message) { if (!value) throw new Error(message); }
 const menu = new Actor('popup-menu-content'), text = new Actor('popup-menu-item');
@@ -70,6 +72,14 @@ assert(dock.effects.length === 0 && dialog.effects.length === 0 && text.effects.
 assert(menu.style.includes('rgba(24,27,36,0.85)') && menu.style.includes('border-radius: 8px'), 'Tint respects opacity and original inline style');
 manager.refresh();
 assert(menu.effects.length === 1, 'No duplicate effects');
+const hoverRedraws = [menu.redraws, panel.redraws, banner.redraws];
+calendarCard.emit('style-changed');
+for (const [id, callback] of [...callbacks]) { callbacks.delete(id); callback(); }
+assert([menu.redraws, panel.redraws, banner.redraws].join() === hoverRedraws.join(),
+    'Hover refresh does not invalidate unchanged backdrops across the desktop');
+values['blur-radius'] = 40; manager.refresh();
+assert(menu.redraws === hoverRedraws[0] + 1 && panel.redraws === hoverRedraws[1] + 1,
+    'Real blur parameter changes invalidate each affected backdrop once');
 for (const [id, callback] of [...callbacks]) { callbacks.delete(id); callback(); }
 text.emit('style-changed');
 assert(callbacks.size === 0, 'Menu-row hover does not schedule a global rescan');

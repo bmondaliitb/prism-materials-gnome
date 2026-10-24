@@ -2,7 +2,11 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 15:** live window frost now marks its top-level compositor actor as backdrop-dependent, preventing partial-redraw tiles from leaving dark square trails when windows move or update underneath it. The guard does not add another offscreen rendering pass and is removed in Translucency-only mode.
+**New in version 17:** **Stable backdrop redraws** (on by default) disables clipped monitor redraws while live frosted surfaces are visible, addressing remaining hover-triggered patches. Full repaints during updates can cost more GPU bandwidth; Eco remains available. No continuous repaint loop is added. See [rendering notes](docs/PERFORMANCE.md).
+
+**Version 16:** hover-triggered refreshes no longer invalidate unchanged window and Shell backdrops. Captures use exact effect bounds so blur does not sample stale pixels from allocation padding.
+
+**Version 15:** live window frost marks its top-level compositor actor as backdrop-dependent. The guard does not add another offscreen rendering pass and is removed in Translucency-only mode.
 
 **Version 14:** choose **Rendering level** in Material settings: Eco (default for integrated GPUs), Balanced, High, or Translucency only (no blur/capture). Changes apply immediately after this version is loaded. See [rendering budgets](docs/PERFORMANCE.md).
 

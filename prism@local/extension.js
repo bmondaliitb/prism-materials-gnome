@@ -11,6 +11,7 @@ import {eligible, materialStyle} from './materials.js';
 
 import {VisualBackdrop} from './backdrop.js';
 import {BackdropRefreshEffect} from './backdropRefreshEffect.js';
+import {RedrawGuard} from './redrawGuard.js';
 import {clientSurfaceRoot} from './windowSurface.js';
 import {FrostEffect} from './frostEffect.js';
 import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
@@ -22,6 +23,8 @@ export default class Prism extends Extension {
         this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this._connections = [];
         this._windows = new Map();
+        this._redrawGuard = new RedrawGuard(() => global.stage.queue_redraw());
+        this._redrawGuard.setEnabled(this._settings.get_boolean('stable-redraws'));
         this._tracker = Shell.WindowTracker.get_default();
         this._gtkMenus = new GtkMenuStyle();
         this._gtkCss = undefined;
@@ -49,7 +52,8 @@ export default class Prism extends Extension {
         this._connect(Main.sessionMode, 'updated', () => this._refresh());
         this._shellSurfaces = new ShellSurfaces(Main.uiGroup, Main.panel, this._settings,
             () => this._dark(), () => this._settings.get_boolean('enabled') &&
-                !this._settings.get_boolean('reduce-transparency') && !Main.sessionMode.isLocked);
+                !this._settings.get_boolean('reduce-transparency') && !Main.sessionMode.isLocked,
+            this._redrawGuard);
         for (const actor of global.get_window_actors())
             this._watch(actor);
         this._syncGtkMenus();
@@ -103,6 +107,7 @@ export default class Prism extends Extension {
     }
 
     _refresh(shell = true) {
+        this._redrawGuard?.setEnabled(this._settings.get_boolean('stable-redraws'));
         if (shell) this._shellSurfaces?.refresh();
         for (const [actor, state] of this._windows) this._update(actor, state);
     }
@@ -154,6 +159,7 @@ export default class Prism extends Extension {
                 state.effect = mode === 'none' ? null : new FrostEffect();
                 state.effectMode = mode;
                 state.layerStyle = null;
+                state.paintKey = null;
                 if (state.effect) state.layer.add_effect(state.effect);
                 actor.insert_child_at_index(state.layer, 0);
             }
@@ -173,7 +179,12 @@ export default class Prism extends Extension {
                 state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
                 state.effect.brightness = dark ? 0.85 : 1.0;
             }
-            state.layer.queue_redraw?.();
+            const paintKey = JSON.stringify([style, state.effect?.radius,
+                state.effect?.brightness, state.effect?.radii, quality]);
+            if (state.paintKey !== paintKey) {
+                state.paintKey = paintKey;
+                state.layer.queue_redraw?.();
+            }
         }
         // The frost layer is a child of MetaWindowActor. Without an effect on
         // the window actor itself, Mutter can cull/clip the windows below it and
@@ -185,12 +196,14 @@ export default class Prism extends Extension {
             actor.remove_effect(state.refreshEffect);
             state.refreshEffect = null;
         }
+        this._redrawGuard?.track(state.layer, Boolean(state.effect));
         state.surface.opacity = !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
             ? Math.round(state.opacity * Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency'))) / 100)
             : state.opacity;
     }
 
     _clear(state) {
+        if (state.layer) this._redrawGuard?.untrack(state.layer);
         if (state.surface) state.surface.opacity = state.opacity;
         if (state.refreshEffect) state.actor.remove_effect(state.refreshEffect);
         state.refreshEffect = null;
@@ -211,6 +224,8 @@ export default class Prism extends Extension {
             for (const [object, id] of state.signals) object.disconnect(id);
         }
         this._windows.clear();
+        this._redrawGuard?.destroy();
+        this._redrawGuard = null;
         this._button.destroy();
         this._button = null;
         this._settings = null;
