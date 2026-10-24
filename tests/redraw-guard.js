@@ -24,6 +24,10 @@ assert(drawFlags === 2 && repaints === 1, 'Visible frost enables complete frames
 guard.track(second, true);
 guard.track(second, true);
 assert(repaints === 1 && second.signals.size === 2, 'Multiple surfaces do not schedule repeated repaints or duplicate handlers');
+guard.setSuspended(true);
+assert(drawFlags === 0, 'Workspace motion releases forced full-monitor redraws while capture is frozen');
+guard.setSuspended(false);
+assert(drawFlags === 2, 'Workspace completion restores artifact protection');
 guard.untrack(first);
 assert(drawFlags === 2, 'Removing one surface keeps protection for another');
 second.mapped = false; second.emit('notify::mapped');

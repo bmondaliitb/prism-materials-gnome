@@ -17,6 +17,7 @@ import {FrostEffect} from './frostEffect.js';
 import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
 import {ShellSurfaces} from './shellSurfaces.js';
 import {Experience} from './experience.js';
+import {OverviewMaterial} from './overviewMaterial.js';
 
 export default class Prism extends Extension {
     enable() {
@@ -24,6 +25,7 @@ export default class Prism extends Extension {
         this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this._connections = [];
         this._windows = new Map();
+        this._workspaceMotion = false;
         this._redrawGuard = new RedrawGuard(() => global.stage.queue_redraw());
         this._redrawGuard.setEnabled(this._settings.get_boolean('stable-redraws'));
         this._tracker = Shell.WindowTracker.get_default();
@@ -51,6 +53,9 @@ export default class Prism extends Extension {
         this._connect(Main.overview, 'showing', () => this._refresh());
         this._connect(Main.overview, 'hidden', () => this._refresh());
         this._connect(Main.sessionMode, 'updated', () => this._refresh());
+        this._connect(global.stage, 'before-paint', () => {
+            if (this._syncWorkspaceMotion() && !this._workspaceMotion) this._refresh();
+        });
         this._experience = new Experience(this._settings, this._interface, () => {
             this._syncGtkMenus();
             this._refresh();
@@ -59,6 +64,9 @@ export default class Prism extends Extension {
             () => this._dark(), () => this._settings.get_boolean('enabled') &&
                 !this._reduced() && !Main.sessionMode.isLocked,
             this._redrawGuard, () => this._context());
+        this._overviewMaterial = new OverviewMaterial(Main.layoutManager, this._settings,
+            () => this._settings.get_boolean('enabled') && !this._reduced() && !Main.sessionMode.isLocked,
+            () => this._context());
         for (const actor of global.get_window_actors())
             this._watch(actor);
         this._syncGtkMenus();
@@ -125,13 +133,31 @@ export default class Prism extends Extension {
     }
 
     _refresh(shell = true) {
+        this._syncWorkspaceMotion();
         this._redrawGuard?.setEnabled(this._settings.get_boolean('stable-redraws'));
         if (shell) this._shellSurfaces?.refresh();
+        this._overviewMaterial?.refresh();
         for (const [actor, state] of this._windows) this._update(actor, state);
+    }
+
+    _syncWorkspaceMotion() {
+        // GNOME 50 uses this controller for keyboard switches and touchpad
+        // gestures, including cancellation. Observe it without wrapping methods.
+        const active = Boolean(this._settings.get_boolean('smooth-workspaces') &&
+            Main.wm?._workspaceAnimation?._switchData);
+        if (Boolean(this._workspaceMotion) === active) return false;
+        this._workspaceMotion = active;
+        FrostEffect.setWorkspaceMotion(active);
+        this._redrawGuard?.setSuspended(active);
+        this._shellSurfaces?.setMotionPaused(active);
+        return true;
     }
 
     _update(actor, state) {
         state.actor ??= actor;
+        // Focus/geometry notifications during a slide must not tear down and
+        // rebuild materials on the source windows used by animation clones.
+        if (this._workspaceMotion && this._settings.get_boolean('enabled') && !this._reduced()) return;
         const s = this._settings;
         const w = state.window;
         const app = this._tracker.get_window_app(w)?.get_id();
@@ -194,6 +220,7 @@ export default class Prism extends Extension {
             if (state.effect) {
                 state.effect.radii = roundedFrost ? [radius, radius, radius, radius] : [0, 0, 0, 0];
                 state.effect.quality = quality;
+                state.effect.maxFps = s.get_int('backdrop-fps') ?? 30;
             }
             const style = materialStyle(s.get_string('preset'), dark, {
                 focused, emphasis: s.get_boolean('focus-emphasis') && !isPopup && !isDialog,
@@ -229,6 +256,7 @@ export default class Prism extends Extension {
             }
             const dark = this._dark();
             state.popupEffect.quality = quality;
+            state.popupEffect.maxFps = s.get_int('backdrop-fps') ?? 30;
             state.popupEffect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
             state.popupEffect.clientTintOpacity = Math.max(75, Math.min(100, s.get_int('popup-opacity'))) / 100;
             state.popupEffect.brightness = dark ? 0.85 : 1;
@@ -279,10 +307,14 @@ export default class Prism extends Extension {
     }
 
     disable() {
+        FrostEffect.setWorkspaceMotion(false);
+        FrostEffect.cancelPendingRefresh();
         this._experience?.destroy();
         this._experience = null;
         this._syncGtkMenus(true);
         this._gtkMenus = null;
+        this._overviewMaterial?.destroy();
+        this._overviewMaterial = null;
         this._shellSurfaces?.destroy();
         this._shellSurfaces = null;
         for (const [object, id] of this._connections) object.disconnect(id);

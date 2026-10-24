@@ -1,0 +1,54 @@
+/* Search boxes share the overview's cached wallpaper blur. Keep alpha on
+ * backgrounds only: labels, icons, native focus rings and geometry stay intact.
+ * Scoping to our root class also covers providers/results added while typing. */
+.prism-overview-material .search-section-content {
+    background-color: rgba(25, 28, 35, 0.60);
+    background-image: none;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f2f2f2;
+}
+
+.prism-overview-material .list-search-result,
+.prism-overview-material .search-provider-icon,
+.prism-overview-material .grid-search-result {
+    background-color: transparent;
+    color: #f2f2f2;
+}
+
+.prism-overview-material .list-search-result:hover,
+.prism-overview-material .search-provider-icon:hover,
+.prism-overview-material .grid-search-result:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.prism-overview-material .list-search-result:focus,
+.prism-overview-material .search-provider-icon:focus,
+.prism-overview-material .grid-search-result:focus,
+.prism-overview-material .list-search-result:selected,
+.prism-overview-material .search-provider-icon:selected,
+.prism-overview-material .grid-search-result:selected,
+.prism-overview-material .list-search-result:highlighted,
+.prism-overview-material .search-provider-icon:highlighted,
+.prism-overview-material .grid-search-result:highlighted,
+.prism-overview-material .list-search-result:checked,
+.prism-overview-material .search-provider-icon:checked,
+.prism-overview-material .grid-search-result:checked {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.prism-overview-material .list-search-result:active,
+.prism-overview-material .search-provider-icon:active,
+.prism-overview-material .grid-search-result:active {
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+.prism-overview-material .list-search-result-description {
+    color: rgba(242, 242, 242, 0.78);
+}
+
+.prism-overview-material .list-search-result:insensitive,
+.prism-overview-material .search-provider-icon:insensitive,
+.prism-overview-material .grid-search-result:insensitive {
+    background-color: transparent;
+    color: rgba(242, 242, 242, 0.4);
+}

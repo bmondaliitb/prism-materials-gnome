@@ -39,6 +39,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         for (const [title, key, min, max, subtitle] of [
             ['Blur radius', 'blur-radius', 0, 80, 'Higher values soften more background detail'],
             ['Background detail reduction', 'background-detail', 0, 80, '25% reduces distracting text and patterns behind rounded frost. Higher values give a quieter background. Foreground text stays unchanged; the native top bar is unaffected.'],
+            ['Backdrop refresh limit', 'backdrop-fps', 0, 60, '30 fps reduces capture work on stationary frost. Foreground stays at normal frame rate; movement and resizing refresh immediately. 0 is unlimited. Native top-bar blur is unaffected.'],
             ['Application backdrop corner radius', 'window-radius', 0, 48, 'Matches the blur backdrop to client corners; 12 px is a starting value, not automatic shape detection.'],
             ['Window opacity', 'translucency', 75, 100, '92% recommended; only used with whole-window translucency'],
         ]) {
@@ -48,6 +49,18 @@ export default class PrismPreferences extends ExtensionPreferences {
         }
         const behavior = new Adw.PreferencesGroup({title: 'Comfort and behavior'});
         page.add(behavior);
+        const performance = new Adw.ActionRow({title: '4K / integrated GPU preset',
+            subtitle: 'Eco, 30 fps backdrop limit, focused app only, no tint animations, and a translucent top bar without blur. Keeps stable redraw protection.'});
+        const applyPerformance = new Gtk.Button({label: 'Apply', valign: Gtk.Align.CENTER});
+        applyPerformance.connect('clicked', () => {
+            settings.set_string('render-quality', 'eco');
+            settings.set_int('backdrop-fps', 30);
+            settings.set_boolean('focused-only', true);
+            settings.set_boolean('gentle-transitions', false);
+            settings.set_boolean('panel-blur', false);
+        });
+        performance.add_suffix(applyPerformance);
+        behavior.add(performance);
         for (const [title, subtitle, key] of [
             ['Material hierarchy', 'Airier dock, stronger dialogs and notifications. Whole-window dialogs stay at least 96% opaque.', 'material-hierarchy'],
             ['Active-window emphasis', 'Clearer backdrop edges on the focused app, quieter tint on inactive apps. Most visible when Focused window only is off.', 'focus-emphasis'],
@@ -56,6 +69,7 @@ export default class PrismPreferences extends ExtensionPreferences {
             ['Automatic comfort', 'Restore native styling in system high contrast. Use Eco and focused app backdrops only on battery or power saver, without changing saved preferences.', 'auto-comfort'],
             ['Wallpaper-aware panel colors', 'Estimate clock and icon contrast from the wallpaper’s top band when it changes. Uses the primary wallpaper, not windows behind the panel; unsupported images fall back to appearance colors.', 'wallpaper-panel'],
             ['Stable backdrop redraws', 'Prevents partial-redraw patches while frosted surfaces are visible. Repaints full monitor frames on updates, which can use more GPU power. No continuous repainting.', 'stable-redraws'],
+            ['Smooth workspace transitions', 'Reuse existing frost during workspace slides and pause top-bar blur until they finish. Restores live effects afterward; no change to saved rendering quality.', 'smooth-workspaces'],
             ['Preserve native rounded corners', 'Keeps material inside rounded boundaries. Disable Rounded frosted glass below to fall back to clear translucency.', 'preserve-corners'],
             ['Rounded frosted glass', 'GPU blur for rounded Shell surfaces and app backdrops. Separate app popups use their native alpha shape; embedded popovers cannot be targeted independently. Capture failures fall back to translucency.', 'rounded-frost'],
             ['Sidebar-only materials', 'Keeps every selected app at full opacity. The Prism launcher detects supported GTK4 sidebars; unknown layouts stay unchanged.', 'sidebar-materials'],
@@ -75,7 +89,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         const applyEverywhere = new Gtk.Button({label: 'Apply', valign: Gtk.Align.CENTER});
         applyEverywhere.connect('clicked', () => {
             for (const key of ['enabled', 'all-applications', 'force-translucency', 'window-dialogs',
-                'window-popups', 'shell-menus', 'shell-panel', 'shell-dock', 'shell-dialogs', 'shell-notifications', 'gtk-menus'])
+                'window-popups', 'shell-menus', 'shell-panel', 'shell-dock', 'shell-dialogs', 'shell-notifications', 'gtk-menus', 'overview-material'])
                 settings.set_boolean(key, true);
             settings.set_boolean('sidebar-materials', false);
             settings.set_boolean('focused-only', false);
@@ -89,6 +103,9 @@ export default class PrismPreferences extends ExtensionPreferences {
             ['Match GTK4 app menus', 'Adds a self-contained managed block to your user GTK4 stylesheet so item menus match Shell menus. Restart GTK4 apps after changing this or the palette/opacity. Does not affect GTK3, Qt, Electron, or sandboxed apps without config access.', 'gtk-menus'],
             ['Shell menus and popups', 'Right-click menus, panel menus, calendar, and Quick Settings using standard Shell menu backgrounds.', 'shell-menus'],
             ['Top bar', 'GNOME panel background; labels and indicators remain opaque.', 'shell-panel'],
+            ['Top bar blur', 'Turn off to keep its neutral translucency without a permanently active background blur. Useful on 4K displays.', 'panel-blur'],
+            ['Overview material', 'Shows wallpaper through a translucent veil and search-result boxes when pressing Meta. Text, icons, and window previews stay crisp.', 'overview-material'],
+            ['Overview wallpaper blur', 'Cached blur of the wallpaper only, avoiding live desktop capture. Respects rendering quality and Translucency only.', 'overview-blur'],
             ['Dash and dock', 'Standard dash backgrounds, including Ubuntu Dock and Dash to Dock when they use the standard class.', 'shell-dock'],
             ['Notification banners and tray', 'Notification banner backgrounds and their nested message cards.', 'shell-notifications'],
             ['Shell dialogs', 'Standard GNOME modal dialog backgrounds.', 'shell-dialogs'],
@@ -98,6 +115,7 @@ export default class PrismPreferences extends ExtensionPreferences {
             surfaces.add(row);
         }
         for (const [title, key, min, subtitle] of [
+            ['Overview background opacity', 'overview-opacity', 0, '35% recommended. Controls the dark neutral veil over the wallpaper; lower values reveal more wallpaper.'],
             ['Top bar background opacity', 'panel-opacity', 0, '25% blends with the background. 0% removes the tint while keeping enabled blur. Clock text and symbolic icons use contrasting foreground colors.'],
             ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled menu, dock, notification, and dialog backgrounds. The top bar has its own control.'],
             ['Application popup opacity', 'popup-opacity', 75, 'Separate app popups only. With frost, adjusts translucent fills while preserving opaque labels; without frost, fades the whole popup including text.'],

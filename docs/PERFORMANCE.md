@@ -1,3 +1,25 @@
+# Version 25: workspace animation cost
+
+GNOME 50 workspace slides paint Clutter.Clone instances of windows. Changing clone transforms previously bypassed the backdrop frame limit and caused fresh captures/filtering throughout the animation. Animation/screenshot clone paints can also supply projection matrices unsuitable for live capture; the inspected Shell journal included an Invalid backdrop projection error from this path. Actual compositor frame times could not be measured here.
+
+Smooth workspace transitions defaults on. A before-paint observer reads GNOME 50's workspace animation controller state (including keyboard switches, gestures, and cancellation). On state changes only, it freezes custom frost on its existing material image, pauses the native panel blur, suspends Prism's owned DISABLE_CLIPPED_REDRAWS flag, and defers window material rebuilds caused by changing focus/geometry. Live capture and native panel blur resume after motion and a fresh capture is forced. Saved appearance settings are unchanged. There is no frame timer for this feature and no wrapping/replacement of Shell animation methods.
+
+This depends on the private GNOME 50 controller `_workspaceAnimation._switchData`; if unavailable the observer stays inactive. Independently, clone paints always reuse their last capture rather than reading live backdrop matrices. A clone with no prior capture uses the native/translucent fallback during motion. Frozen material can look less responsive during the slide, and the top bar temporarily uses plain translucent tint. The native animation itself is retained.
+
+Tests cover zero new capture/filter work across simulated motion paints, native panel pause/restoration, full-redraw flag suspension/restoration, deferred window styling, cancellation/end policy, and unchanged quality preferences. Live gesture/frame-rate verification remains necessary on the desktop.
+
+# Version 24: 4K rendering improvements
+
+Custom FrostEffect now captures its backdrop before chaining into the native offscreen paint path. It no longer forcibly marks the foreground ACTOR_DIRTY every paint, allowing GNOME to reuse unchanged foreground textures. Actual foreground changes still use the compositor's supplied dirty flag.
+
+Backdrop refresh limit defaults to 30 fps, with 0 for unlimited and a range up to 60. Stationary custom frost reuses captured and filtered backgrounds inside that interval. Geometry, transform, scale, blur radius, and rendering quality changes bypass the limit. One shared trailing refresh requests the last background update if no later external frame arrives; a shared epoch makes all custom effects refresh together to avoid mutual timer feedback. This is not a continuous animation loop. Rapidly moving surfaces still capture at the compositor rate to avoid dragging stale images across the desktop. This limit does not throttle native top-bar blur or the foreground frame rate.
+
+Each effect retains up to four framebuffer capture/filter records. Alternating monitor targets, including differently scaled monitors, can reuse their own storage instead of repeatedly reallocating one texture. This trades some retained GPU memory for fewer allocations; the cache is bounded, not desktop-wide or persistent after effect collection.
+
+The **4K / integrated GPU preset** is opt-in and sets Eco, 30 fps, Focused window only on, Gentle tint transitions off, and Top bar blur off. The top bar keeps its neutral tint and foreground colors. Stable backdrop redraws remains unchanged: disabling clipping is still costly on 4K, but removing that workaround can reintroduce partial-frame artifacts. These improvements do not remove full-resolution capture/compositing cost. No live GPU timings or frame-rate guarantee are available.
+
+Tests exercise capture limiting, unchanged foreground flags, immediate geometry/quality invalidation, final refresh without timer feedback, per-framebuffer storage reuse, and native-panel blur removal. A simulated 120 stationary paint requests over one second performs about 30 captures; this is a code-path count, not a measured desktop benchmark. All blur-profile shader tests remain in place.
+
 # Version 22: suppressing text-band artifacts
 
 Blur uses successive 2× downsample passes rather than jumping directly to a coarse texture. Its final reduction also accounts for blur radius and tap count so Gaussian taps do not skip whole reduced-image texels. This reduces aliasing and repeated text-row bands without increasing sample count per directional blur pass. The final Gaussian targets remain within the selected quality budget, but early prefilter targets can be larger than that budget (up to about a quarter of capture area); more small render passes and intermediate storage are the tradeoff for better filtering.

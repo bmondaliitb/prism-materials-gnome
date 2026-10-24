@@ -17,7 +17,13 @@
   </key>
   <key name="blur-radius" type="i"><default>36</default></key>
   <key name="background-detail" type="i"><range min="0" max="80"/><default>25</default></key>
+  <key name="backdrop-fps" type="i"><range min="0" max="60"/><default>30</default></key>
+  <key name="panel-blur" type="b"><default>true</default></key>
+  <key name="overview-material" type="b"><default>true</default></key>
+  <key name="overview-blur" type="b"><default>true</default></key>
+  <key name="overview-opacity" type="i"><range min="0" max="100"/><default>35</default></key>
   <key name="stable-redraws" type="b"><default>true</default></key>
+  <key name="smooth-workspaces" type="b"><default>true</default></key>
   <key name="translucency" type="i"><default>92</default></key>
   <key name="force-translucency" type="b"><default>false</default></key>
   <key name="focused-only" type="b"><default>true</default></key>

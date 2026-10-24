@@ -8,7 +8,7 @@ const loop = {PRIORITY_DEFAULT_IDLE: 0, SOURCE_REMOVE: false,
     idle_add: (_priority, callback) => { callbacks.set(++sourceId, callback); return sourceId; },
     source_remove: id => callbacks.delete(id)};
 const Manager = new Function('GLib', 'Shell', 'St', 'shellSurfaceKind', 'shellSurfaceRole', 'FrostEffect', 'surfaceOpacity', 'panelIsDark', source + '\nreturn ShellSurfaces;')(
-    loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {isNative = true;}},
+    loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {isNative = true; set_enabled(value) { this.enabled = value; }}},
     {Label: class {static [Symbol.hasInstance](actor) { return actor.isLabel; }},
         Icon: class {static [Symbol.hasInstance](actor) { return actor.isIcon; }}},
     shellSurfaceKind, shellSurfaceRole, class {isFrost = true;}, surfaceOpacity, panelIsDark);
@@ -61,7 +61,7 @@ const orphan = new Actor('popup-menu-boxpointer popup-menu', [new Actor('custom-
 const root = new Actor('', [pointer, orphan, dock, panel, dialog, looseCalendar, banner]);
 let active = false, dark = true;
 const values = {'shell-menus': true, 'shell-panel': true, 'shell-dock': false, 'shell-dialogs': false,
-    'shell-opacity': 85, 'panel-opacity': 25, 'blur-radius': 36};
+    'shell-opacity': 85, 'panel-opacity': 25, 'panel-blur': true, 'blur-radius': 36};
 const settings = {get_boolean: key => values[key], get_int: key => values[key], get_string: key => values[key]};
 let environment = {};
 const manager = new Manager(root, panel, settings, () => dark, () => active, null, () => environment);
@@ -70,6 +70,14 @@ active = true; manager.refresh();
 assert(menu.effects.length === 1 && panel.effects.length === 1, 'Enabled surfaces receive blur');
 assert(panel.style.includes('background-color: rgba(32,34,38,0.25) !important;'), 'Panel has a light tint that blends with the background');
 assert(panel.effects[0].brightness === 1, 'Panel preserves background brightness');
+const nativePanelEffect = panel.effects[0], nativePanelStyle = panel.style;
+manager.setMotionPaused(true);
+assert(!nativePanelEffect.enabled && panel.style === nativePanelStyle, 'Workspace animation pauses native panel blur while retaining its styling');
+manager.setMotionPaused(false);
+assert(nativePanelEffect.enabled && panel.effects[0] === nativePanelEffect, 'Workspace completion reuses and restores the existing native panel effect');
+values['panel-blur'] = false; manager.refresh();
+assert(panel.effects.length === 0 && panel.style.includes('rgba(32,34,38,0.25)'), '4K profile can keep panel translucency without permanent native blur');
+values['panel-blur'] = true; manager.refresh();
 assert(panel.effects[0].isNative && !panel.effects[0].isFrost, 'Panel controls are not clipped through the custom rounded shader');
 assert(workspaceDot.style === 'border-radius: 8px;' && workspaceLayout.style === 'border-radius: 8px;' && panelButton.style === 'border-radius: 8px;',
     'Workspace dots, layout widgets, and buttons keep their native inline styles');

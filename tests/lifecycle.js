@@ -21,11 +21,18 @@ const values = {'enabled': true, 'reduce-transparency': false, 'focused-only': t
     'applications': ['test.desktop'], 'appearance': 'dark', 'preset': 'frosted',
     'sidebar-materials': false, 'blur-radius': 36, 'force-translucency': true, 'translucency': 92};
 const settings = {};
+const motionStates = [];
+class MockFrost {
+    isFrost = true;
+    static setWorkspaceMotion(active) { motionStates.push(active); }
+}
+const shellMain = {overview: {visible: false}, sessionMode: {isLocked: false},
+    wm: {_workspaceAnimation: {_switchData: null}}};
 for (const method of ['get_boolean', 'get_strv', 'get_int', 'get_string']) settings[method] = key => values[key];
 const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'BackdropRefreshEffect', 'gtkMenuCss',
     source + '\nreturn Prism;')(
     class {}, {}, {WindowType: {NORMAL: 0, MENU: 1, DROPDOWN_MENU: 2, POPUP_MENU: 3, TOOLTIP: 4, COMBO: 5, DIALOG: 6, MODAL_DIALOG: 7, UTILITY: 8, TOOLBAR: 9, DESKTOP: 10}}, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {}}, {Widget},
-    {overview: {visible: false}, sessionMode: {isLocked: false}}, {display: {focus_window: win}}, eligible, materialStyle, class {isFrost = true;}, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`);
+    shellMain, {display: {focus_window: win}}, eligible, materialStyle, MockFrost, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`);
 const extension = new Prism();
 extension._settings = settings;
 extension._tracker = {get_window_app: () => ({get_id: () => 'test.desktop'})};
@@ -171,4 +178,26 @@ extension._shellSurfaces = {refresh: () => shellRefreshes++};
 extension._windows = new Map();
 extension._refresh(false);
 assert(cssSyncs === 0 && shellRefreshes === 0, 'Focus refresh does no stylesheet IO or Shell tree scan');
+values['smooth-workspaces'] = true;
+let redrawSuspended = false, nativePaused = false;
+extension._redrawGuard = {setSuspended: value => { redrawSuspended = value; }, setEnabled() {}, track() {}, untrack() {}};
+extension._shellSurfaces.setMotionPaused = value => { nativePaused = value; };
+extension._windows.set(actor, state);
+extension._update(actor, state);
+const workspaceLayer = state.layer, workspaceStyle = state.layer.style;
+shellMain.wm._workspaceAnimation._switchData = {};
+assert(extension._syncWorkspaceMotion() && redrawSuspended && nativePaused, 'Keyboard/gesture animation lifecycle suspends live blur and full-redraw protection');
+values.preset = 'soft';
+extension._update(actor, state);
+assert(state.layer === workspaceLayer && state.layer.style === workspaceStyle, 'Notifications during workspace motion do not rebuild or restyle source window materials');
+shellMain.wm._workspaceAnimation._switchData = null;
+extension._syncWorkspaceMotion();
+extension._refresh();
+assert(!redrawSuspended && !nativePaused && state.layer === workspaceLayer && state.layer.style !== workspaceStyle,
+    'Workspace completion/cancellation restores live appearance and applies deferred settings');
+assert(motionStates.join() === 'true,false' && values['render-quality'] === 'high', 'Workspace optimization changes no saved rendering quality');
+shellMain.wm._workspaceAnimation._switchData = {};
+values['smooth-workspaces'] = false;
+assert(!extension._syncWorkspaceMotion(), 'Workspace optimization can be disabled');
+extension._clear(state);
 print('Lifecycle and focus hot-path checks passed');

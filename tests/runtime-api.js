@@ -3,6 +3,7 @@ import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 import Gio from 'gi://Gio';
+import St from 'gi://St';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import {BackdropRefreshEffect} from '../prism@local/backdropRefreshEffect.js';
 function check(type, names) {
@@ -12,8 +13,15 @@ function check(type, names) {
 check(Clutter.PaintContext, ['get_framebuffer']);
 check(Clutter.Actor, ['continue_pick', 'peek_stage_views', 'get_transformed_position', 'get_transformed_size', 'get_size', 'get_resource_scale', 'get_paint_opacity']);
 check(Clutter.Actor, ['continue_paint', 'add_effect', 'remove_effect']);
-check(Clutter.Effect, ['get_actor']);
+check(Clutter.Effect, ['get_actor', 'queue_repaint']);
 check(Clutter.Actor, ['is_mapped']);
+check(Clutter.Actor, ['is_in_clone_paint']);
+check(Shell.BlurEffect, ['set_enabled']);
+check(St.Widget, ['has_style_class_name', 'add_style_class_name', 'remove_style_class_name']);
+const theme = new St.Theme();
+const stylesheet = Gio.File.new_for_path('prism@local/stylesheet.css');
+theme.load_stylesheet(stylesheet);
+theme.unload_stylesheet(stylesheet);
 for (const method of ['get_debug_flags', 'add_debug_flags', 'remove_debug_flags'])
     if (typeof Clutter[method] !== 'function') throw new Error(`Missing ${method}`);
 if (!Clutter.DrawDebugFlag.DISABLE_CLIPPED_REDRAWS) throw new Error('Missing redraw compatibility flag');

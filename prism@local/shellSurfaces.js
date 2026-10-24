@@ -134,6 +134,15 @@ export class ShellSurfaces {
         }
     }
 
+    setMotionPaused(paused) {
+        if (Boolean(this._motionPaused) === paused) return;
+        this._motionPaused = paused;
+        for (const [actor, saved] of this._applied) {
+            if (saved.type === 'native-panel') saved.effect.set_enabled(!paused);
+            this._redrawGuard?.track(actor, Boolean(saved.effect) && !paused);
+        }
+    }
+
     refresh() {
         const active = this._permitted();
         const dark = this._isDark();
@@ -165,7 +174,7 @@ export class ShellSurfaces {
             const rounded = radii?.some(radius => radius > 0);
             const quality = context.quality ?? this._settings.get_string('render-quality') ?? 'eco';
             const type = role !== 'surface' || quality === 'off' ? null
-                : kind === 'panel' ? ((!safe || (radii && !rounded)) ? 'native-panel' : null)
+                : kind === 'panel' ? (this._settings.get_boolean('panel-blur') && (!safe || (radii && !rounded)) ? 'native-panel' : null)
                 : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
                 : (!safe || (radii && !rounded)) ? 'frost' : null;
             if (saved.type !== type) {
@@ -175,10 +184,12 @@ export class ShellSurfaces {
                 saved.type = type;
                 saved.paintKey = null;
                 if (saved.effect) actor.add_effect(saved.effect);
+                if (type === 'native-panel' && this._motionPaused) saved.effect.set_enabled(false);
             }
             if (type === 'frost') {
                 saved.effect.radii = safe ? radii : [0, 0, 0, 0];
                 saved.effect.quality = quality;
+                saved.effect.maxFps = this._settings.get_int('backdrop-fps') ?? 30;
                 saved.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
                     Math.max(0, Math.min(80, this._settings.get_int('background-detail') ?? 25)) / 100];
             }
@@ -195,7 +206,7 @@ export class ShellSurfaces {
                     actor.queue_redraw?.();
                 }
             }
-            this._redrawGuard?.track(actor, Boolean(saved.effect));
+            this._redrawGuard?.track(actor, Boolean(saved.effect) && !this._motionPaused);
             // Theme !important rules (notably Yaru #panel) otherwise keep opaque paint.
             // BoxPointer paints its own Cairo background beneath popup-menu-content.
             const materialAlpha = surfaceOpacity(kind, alpha, this._settings.get_boolean('material-hierarchy'));

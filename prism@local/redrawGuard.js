@@ -11,10 +11,16 @@ export class RedrawGuard {
         this._actors = new Map();
         this._enabled = true;
         this._owned = false;
+        this._suspended = false;
     }
 
     setEnabled(enabled) {
         this._enabled = enabled;
+        this._sync();
+    }
+
+    setSuspended(suspended) {
+        this._suspended = suspended;
         this._sync();
     }
 
@@ -36,7 +42,7 @@ export class RedrawGuard {
     }
 
     _sync() {
-        const needed = this._enabled && [...this._actors.keys()].some(actor => actor.is_mapped());
+        const needed = this._enabled && !this._suspended && [...this._actors.keys()].some(actor => actor.is_mapped());
         const flag = this._api.DrawDebugFlag.DISABLE_CLIPPED_REDRAWS;
         if (needed) {
             const [, draw] = this._api.get_debug_flags();

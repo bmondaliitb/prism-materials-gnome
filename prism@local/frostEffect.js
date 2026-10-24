@@ -1,16 +1,59 @@
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import {FROST_DECLARATIONS, FROST_CODE} from './frostShader.js';
 
 import {BlurBuffer} from './frostBlur.js';
 import {framebufferCapture} from './frostGeometry.js';
 
+// One shared trailing refresh keeps a throttled backdrop from getting stuck on
+// the penultimate frame. The epoch forces every effect to capture that repaint,
+// preventing several effects from scheduling refreshes in response to each other.
+let refreshEpoch = 0;
+let workspaceMotion = false;
+let refreshSource = 0;
+const pendingRefresh = new Set();
+function deferBackdrop(effect, delayUs) {
+    pendingRefresh.add(effect);
+    if (refreshSource) return;
+    refreshSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.max(1, Math.ceil(delayUs / 1000)), () => {
+        refreshSource = 0;
+        refreshEpoch++;
+        const effects = [...pendingRefresh];
+        pendingRefresh.clear();
+        for (const item of effects) {
+            if (item.get_actor()?.is_mapped()) item.queue_repaint();
+        }
+        return GLib.SOURCE_REMOVE;
+    });
+}
+function cancelDeferred(effect) {
+    pendingRefresh.delete(effect);
+    if (!pendingRefresh.size && refreshSource) {
+        GLib.source_remove(refreshSource);
+        refreshSource = 0;
+    }
+}
+
 // Capture the background BEFORE the actor is redirected offscreen. A mask wrapped
 // around Shell.BlurEffect alone can capture an empty offscreen buffer instead.
 export const FrostEffect = GObject.registerClass({GTypeName: 'PrismRoundedFrostEffect'},
 class FrostEffect extends Shell.GLSLEffect {
+    static setWorkspaceMotion(active) {
+        if (workspaceMotion === active) return;
+        workspaceMotion = active;
+        this.cancelPendingRefresh();
+    }
+
+    static cancelPendingRefresh() {
+        if (refreshSource) GLib.source_remove(refreshSource);
+        refreshSource = 0;
+        pendingRefresh.clear();
+        refreshEpoch++;
+    }
+
     _init() {
         super._init();
         this.radius = 36;
@@ -20,6 +63,8 @@ class FrostEffect extends Shell.GLSLEffect {
         this.veil = [0.10, 0.11, 0.14, 0.25];
         this.nativeShape = false;
         this.clientTintOpacity = 1;
+        this.maxFps = 30;
+        this._sources = new Map();
         this._capture = null;
         this._texture = null;
         this._framebuffer = null;
@@ -44,11 +89,23 @@ class FrostEffect extends Shell.GLSLEffect {
     }
 
     vfunc_paint(node, context, flags) {
-        // Live background changes must not reuse an old background capture.
-        super.vfunc_paint(node, context, flags | Clutter.EffectPaintFlags.ACTOR_DIRTY);
+        // Capture separately from foreground redirection. Forcing ACTOR_DIRTY
+        // used to redraw large, unchanged foreground textures on every frame.
+        if (flags & Clutter.EffectPaintFlags.BYPASS_EFFECT) this._capture = null;
+        else if (workspaceMotion || this.get_actor().is_in_clone_paint?.()) {
+            // Clones move an existing scene; their framebuffer matrices need
+            // not describe a live backdrop. Reuse the last material image.
+            cancelDeferred(this);
+        }
+        else this._updateBackdrop(context);
+        super.vfunc_paint(node, context, flags);
     }
 
     vfunc_pre_paint(node, context) {
+        return super.vfunc_pre_paint(node, context);
+    }
+
+    _updateBackdrop(context) {
         this._capture = null;
         try {
             const actor = this.get_actor();
@@ -58,6 +115,28 @@ class FrostEffect extends Shell.GLSLEffect {
             const capture = framebufferCapture(source, width, height);
             if (!capture) return false;
             const {rect} = capture;
+            const signature = JSON.stringify([rect, capture.basis, capture.origin,
+                capture.scale, this.radius, this.quality]);
+            const now = GLib.get_monotonic_time();
+            let cached = this._sources.get(source);
+            // Separate storage avoids reallocating a single capture repeatedly
+            // when a window straddles differently scaled monitor framebuffers.
+            if (cached) {
+                this._texture = cached.texture;
+                this._framebuffer = cached.framebuffer;
+                this._blurBuffer = cached.blurBuffer;
+                this._bufferQuality = cached.quality;
+                this._blurred = cached.blurred;
+                if (this.maxFps > 0 && cached.epoch === refreshEpoch && cached.signature === signature &&
+                    now - cached.time < 1000000 / this.maxFps) {
+                    deferBackdrop(this, 1000000 / this.maxFps - (now - cached.time));
+                    this._capture = capture;
+                    return true;
+                }
+            } else {
+                this._texture = this._framebuffer = this._blurBuffer = null;
+                this._bufferQuality = null;
+            }
             // Capture only the effect's bounds. Allocation padding can reach
             // outside the region repainted by Mutter; filtering those pixels
             // leaks stale framebuffer tiles into an otherwise current backdrop.
@@ -75,7 +154,13 @@ class FrostEffect extends Shell.GLSLEffect {
             const radius = Math.max(0, Math.min(80, this.radius)) * capture.scale;
             this._blurred = radius > 0 ? this._blurBuffer.render(this._texture, radius) : this._texture;
             this._capture = capture;
-            return super.vfunc_pre_paint(node, context);
+            cancelDeferred(this);
+            this._sources.set(source, {signature, time: now, epoch: refreshEpoch, texture: this._texture,
+                framebuffer: this._framebuffer, blurBuffer: this._blurBuffer,
+                quality: this._bufferQuality, blurred: this._blurred});
+            // Bound storage if transient offscreen targets keep appearing.
+            if (this._sources.size > 4) this._sources.delete(this._sources.keys().next().value);
+            return true;
         } catch (error) {
             this._report(error);
             return false;

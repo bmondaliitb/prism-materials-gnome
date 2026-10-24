@@ -2,7 +2,15 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 23:** restores frost for separate app dropdowns and menus directly on the native client surface, using client alpha to leave transparent margins and faint shadows unfilled. No second backdrop plate. Popup opacity adjusts translucent fills in frost mode while opaque labels remain unchanged. Embedded popovers remain toolkit-owned.
+**New in version 27:** overview search-result boxes now use a dark translucent material with translucent hover, selection, and pressed highlights. They share the overview wallpaper blur without adding per-result capture or blur effects.
+
+**Version 26:** the Meta-key overview gains a translucent wallpaper material, enabled by default, with separate **Overview wallpaper blur** and **Overview background opacity** controls. Only wallpaper actors are blurred using native cached actor blur; search, app labels, and previews remain crisp. See [overview behavior](docs/OVERVIEW.md).
+
+**Version 25:** added **Smooth workspace transitions**, freezing frost during slides and restoring live effects afterward without changing saved quality.
+
+**Version 24:** cached unchanged foreground textures, introduced a 30 fps stationary backdrop limit, and added **Comfort and behavior → 4K / integrated GPU preset → Apply**. See [performance details](docs/PERFORMANCE.md).
+
+**Version 23:** restored frost for separate app dropdowns and menus directly on their native client surface, preserving transparent margins without a second backing plate.
 
 **Version 22:** improved downsampling to suppress text bands and introduced **Background detail reduction**, default 25%, for calmer frosted backgrounds. Native panel blur is unaffected.
 
