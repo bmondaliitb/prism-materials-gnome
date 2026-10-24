@@ -29,7 +29,9 @@ const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'g
 const extension = new Prism();
 extension._settings = settings;
 extension._tracker = {get_window_app: () => ({get_id: () => 'test.desktop'})};
-const surface = {opacity: 240, constructor: {$gtype: 'MetaSurfaceContainerActorWayland'}};
+const surface = {opacity: 240, effects: [], constructor: {$gtype: 'MetaSurfaceContainerActorWayland'},
+    add_effect(effect) { this.effects.push(effect); },
+    remove_effect(effect) { this.effects = this.effects.filter(item => item !== effect); }};
 const decoration = {opacity: 255, constructor: {$gtype: 'OtherExtensionDecoration'}};
 const actor = {effects: [], get_children: () => [decoration, surface], insert_child_at_index: () => {},
     add_effect(effect) { this.effects.push(effect); },
@@ -88,8 +90,19 @@ extension._update(actor, state);
 assert(state.layer === null, 'Popups excluded until requested');
 values['window-popups'] = true;
 extension._update(actor, state);
-assert(state.layer !== null && surface.opacity === 192, 'Popup opacity is independent of sidebar and whole-window mode');
+assert(state.layer === null && state.popupEffect.nativeShape && surface.effects.length === 1 && surface.opacity === 240,
+    'Popup frost attaches directly to the client with no second plate or final whole-client fade');
+assert(state.popupEffect.clientTintOpacity === 0.8 && actor.effects.length === 1,
+    'Popup opacity controls translucent fill and backdrop refresh protection remains active');
+values['render-quality'] = 'off';
+extension._update(actor, state);
+assert(!state.popupEffect && surface.effects.length === 0 && actor.effects.length === 0 && surface.opacity === 192,
+    'Translucency-only removes native popup frost and restores whole-popup opacity behavior');
+values['render-quality'] = 'eco';
+extension._update(actor, state);
+assert(surface.effects.length === 1 && surface.opacity === 240, 'Popup frost can be restored without accumulating effects or opacity');
 extension._clear(state);
+assert(surface.effects.length === 0 && actor.effects.length === 0, 'Popup cleanup removes the client renderer and refresh guard');
 windowType = 10;
 extension._update(actor, state);
 assert(state.layer === null, 'Desktop never admitted by broad scope');

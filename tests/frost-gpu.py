@@ -4,6 +4,7 @@ import json
 import os
 import statistics
 import sys
+import math
 quality = sys.argv[1] if len(sys.argv) > 1 else 'balanced'
 factor, taps = {'eco': (8,5), 'balanced': (4,9), 'high': (2,9)}[quality]
 small_size = 64 // factor
@@ -47,7 +48,7 @@ loc=bind(G,'glGetUniformLocation',I,U,C.c_char_p)
 for name, values in {
  'prismActive':[1], 'prismSize':[64,64], 'prismTexSize':[64,64], 'prismPadding':[0,0],
  'prismRadii':[12,12,12,12], 'prismBasis':[64,0,0,64], 'prismOrigin':[0,0], 'prismBackdropSize':[64,64],
- 'prismRadius':[12], 'prismScale':[1], 'prismOpacity':[1], 'prismBrightness':[1], 'sourceColor':[0,0,0,0],
+ 'prismRadius':[12], 'prismScale':[1], 'prismOpacity':[1], 'prismBrightness':[1], 'prismVeil':[0.1,0.11,0.14,0], 'prismNativeShape':[0], 'prismNativeTintOpacity':[1], 'sourceColor':[0,0,0,0],
 }.items():
     bind(G,f'glUniform{len(values)}fv',None,I,I,C.POINTER(F))(loc(program,name.encode()),1,(F*len(values))(*values))
 bind(G,'glUniform1i',None,I,I)(loc(program,b'cogl_sampler1'),0)
@@ -82,20 +83,29 @@ def filter_program(code):
  ok=I();bind(G,'glGetProgramiv',None,U,U,C.POINTER(I))(result,0x8B82,C.byref(ok));assert ok.value
  return result
 filters=[filter_program(snippet['downsample']),filter_program(snippet['ecoBlur'] if quality == 'eco' else snippet['blur'])]
-targets=[]
-for size in [mid_size,small_size,small_size,small_size]:
+targets={}
+def target(index,size):
+ if (index,size) in targets: return targets[index,size]
  tex=U();bind(G,'glGenTextures',None,I,C.POINTER(U))(1,C.byref(tex));bindTexture(0x0DE1,tex)
  for param,value in [(0x2801,0x2601),(0x2800,0x2601),(0x2802,0x812F),(0x2803,0x812F)]:parameter(0x0DE1,param,value)
  bind(G,'glTexImage2D',None,U,I,I,I,I,I,U,U,P)(0x0DE1,0,0x1908,size,size,0,0x1908,0x1401,None)
  fbo=U();bind(G,'glGenFramebuffers',None,I,C.POINTER(U))(1,C.byref(fbo));bindFramebuffer(0x8D40,fbo)
  bind(G,'glFramebufferTexture2D',None,U,U,U,U,I)(0x8D40,0x8CE0,0x0DE1,tex,0)
  assert bind(G,'glCheckFramebufferStatus',U,U)(0x8D40)==0x8CD5
- targets.append((tex,fbo,size))
+ targets[index,size]=(tex,fbo,size)
+ return targets[index,size]
 def render(radius):
  input_texture=texture
  if radius>0:
-  for target,filter_id,step in zip(targets,[0,0,1,1],[(0.25/mid_size,0.25/mid_size),(0.25/small_size,0.25/small_size),(radius/((taps-1)*32),0),(0,radius/((taps-1)*32))]):
-   tex,fbo,size=target; filter=filters[filter_id]
+  reduction=factor
+  while reduction<radius/((taps-1)/2): reduction*=2
+  stages=[]; current=2
+  while current<=reduction:
+   size=max(1,math.ceil(64/current)); stages.append((size,0,(0.25/size,0.25/size)));current*=2
+  size=max(1,math.ceil(64/reduction))
+  stages.extend([(size,1,(radius/((taps-1)*32),0)),(size,1,(0,radius/((taps-1)*32)))])
+  for index,(size,filter_id,step) in enumerate(stages):
+   tex,fbo,size=target(index,size); filter=filters[filter_id]
    use(filter);bindFramebuffer(0x8D40,fbo);viewport(0,0,size,size);bindTexture(0x0DE1,input_texture)
    set2(loc(filter,b'prismStep'),*step);draw(5,0,4);input_texture=tex
  use(program);bindFramebuffer(0x8D40,0);viewport(0,0,64,64);bindTexture(0x0DE1,input_texture)
@@ -130,6 +140,34 @@ for axis in [0,1]:
  soft=render(12)
  x,y=(27,32) if axis==0 else (32,27)
  assert 10 < soft[(y*64+x)*4] < 120, 'Separable pass must soften a broad edge on each axis'
+# Dense terminal-like glyph rows must lose their periodic horizontal structure.
+rows=[]
+for y in range(64):
+ for x in range(64):
+  value=240 if y%14<3 and x%7<5 else 20
+  rows.extend([value,value,value,255])
+bindTexture(0x0DE1,texture)
+bind(G,'glTexImage2D',None,U,I,I,I,I,I,U,U,P)(0x0DE1,0,0x1908,64,64,0,0x1908,0x1401,(C.c_ubyte*len(rows))(*rows))
+text_sharp=render(0); text_soft=render(24)
+assert spread(text_soft)<spread(text_sharp)*0.25, (quality,spread(text_soft),spread(text_sharp))
+set4(loc(program,b'prismVeil'),1,(F*4)(0.1,0.11,0.14,0.5))
+quiet=render(24)
+assert spread(quiet)<spread(text_soft)*0.65+0.5, 'Detail reduction must further suppress backdrop contrast'
+set4(loc(program,b'sourceColor'),1,(F*4)(1,1,1,1))
+assert render(24)[(32*64+32)*4:(32*64+32)*4+4]==[255,255,255,255], 'Detail reduction must not alter opaque foreground text'
+uniform1(loc(program,b'prismNativeShape'),1)
+uniform1(loc(program,b'prismNativeTintOpacity'),0.8)
+set4(loc(program,b'sourceColor'),1,(F*4)(0,0,0,0))
+native_empty=render(24)
+assert all(value==0 for value in native_empty), 'Native popup margins must stay completely transparent with no backdrop plate'
+set4(loc(program,b'sourceColor'),1,(F*4)(0,0,0,0.1))
+native_shadow=render(24)
+assert abs(native_shadow[(32*64+32)*4+3]-26)<=1, 'Native low-alpha shadow must not fill with frost'
+set4(loc(program,b'sourceColor'),1,(F*4)(0.17,0.17,0.17,0.85))
+native_fill=render(24)
+assert native_fill[(32*64+32)*4+3]==255, 'Translucent popup fill composites against blurred backdrop without leaking sharp text'
+set4(loc(program,b'sourceColor'),1,(F*4)(1,1,1,1))
+assert render(24)[(32*64+32)*4:(32*64+32)*4+4]==[255,255,255,255], 'Popup opacity keeps opaque labels and icons sharp'
 assert bind(G,'glGetError',U)()==0,'GL error'
 print(f'Actual {quality} GLSL pixel test passed: detail deviation {spread(sharp):.1f} -> {spread(frosted):.1f}; transparent corners, opaque center')
 bind(E,'eglMakeCurrent',U,P,P,P,P)(display,None,None,None)

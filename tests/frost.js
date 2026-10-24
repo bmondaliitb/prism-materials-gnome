@@ -108,9 +108,9 @@ for (const [w, h] of [[1920,1080], [3840,2160], [7680,4320], [1,1]]) {
 const blur = new filters.BlurBuffer({}, 'balanced');
 const input = new Texture(3840,2160);
 const output = blur.render(input, 56);
-assert(output.get_width() < 3840 && draws === 4 && allocations === 4, 'Blur uses four small passes');
-assert(blur.render(input, 36) === output && allocations === 4, 'Frame and radius changes reuse intermediate storage');
-assert(draws === 8, 'Live backdrop is updated without stale caching');
+assert(output.get_width() < 3840 && draws === 6 && allocations === 6, 'Large blur uses progressive 2x reductions before directional filtering');
+assert(blur.render(input, 36) === output && allocations === 6, 'Stable reduction level reuses intermediate storage');
+assert(draws === 12, 'Live backdrop is updated without stale caching');
 for (const [quality, level] of Object.entries(RENDER_LEVELS)) {
     for (const [w,h] of [[1920,1080],[3840,2160],[7680,4320],[1,1]]) {
         const size = filters.blurSize(w,h,quality);
@@ -119,7 +119,10 @@ for (const [quality, level] of Object.entries(RENDER_LEVELS)) {
     }
     const buffer = new filters.BlurBuffer({}, quality);
     const result = buffer.render(input, 56);
-    assert(result.get_width() === filters.blurSize(3840,2160,quality).width, `${quality} reaches actual target allocation`);
+    const size = filters.blurSize(3840,2160,quality,56);
+    assert(result.get_width() === size.width, `${quality} reaches actual target allocation`);
+    assert(56 / (((level.taps - 1) / 2) * size.factor) <= 1,
+        `${quality} never skips whole texels between Gaussian taps`);
 }
 assert(renderLevel('invalid') === RENDER_LEVELS.eco, 'Unknown profiles safely use Eco');
 assert(filters.blurSize(1920,1080,'eco').width < filters.blurSize(1920,1080,'balanced').width,

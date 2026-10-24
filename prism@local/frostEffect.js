@@ -17,6 +17,9 @@ class FrostEffect extends Shell.GLSLEffect {
         this.quality = 'eco';
         this.brightness = 1;
         this.radii = [0, 0, 0, 0];
+        this.veil = [0.10, 0.11, 0.14, 0.25];
+        this.nativeShape = false;
+        this.clientTintOpacity = 1;
         this._capture = null;
         this._texture = null;
         this._framebuffer = null;
@@ -81,6 +84,10 @@ class FrostEffect extends Shell.GLSLEffect {
 
     vfunc_paint_target(node, context) {
         const pipeline = this.get_pipeline();
+        if (this._uniformPipeline !== pipeline) {
+            this._uniformPipeline = pipeline;
+            this._uniforms.clear();
+        }
         const uniform = (name, components, values) => {
             // Pipeline.set_uniform_float has an explicit vector count in GJS.
             if (!this._uniforms.has(name)) this._uniforms.set(name, pipeline.get_uniform_location(name));
@@ -111,6 +118,9 @@ class FrostEffect extends Shell.GLSLEffect {
                 uniform('prismBackdropSize', 2, [rect.width, rect.height]);
                 uniform('prismOpacity', 1, [actor.get_paint_opacity() / 255]);
                 uniform('prismBrightness', 1, [this.brightness]);
+                uniform('prismVeil', 4, this.veil);
+                uniform('prismNativeShape', 1, [this.nativeShape ? 1 : 0]);
+                uniform('prismNativeTintOpacity', 1, [this.clientTintOpacity]);
                 uniform('prismActive', 1, [1]);
             }
         } catch (error) {

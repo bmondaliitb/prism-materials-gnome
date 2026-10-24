@@ -38,6 +38,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         combo('Appearance', 'appearance', ['auto', 'light', 'dark'], ['Follow desktop', 'Light', 'Dark']);
         for (const [title, key, min, max, subtitle] of [
             ['Blur radius', 'blur-radius', 0, 80, 'Higher values soften more background detail'],
+            ['Background detail reduction', 'background-detail', 0, 80, '25% reduces distracting text and patterns behind rounded frost. Higher values give a quieter background. Foreground text stays unchanged; the native top bar is unaffected.'],
             ['Application backdrop corner radius', 'window-radius', 0, 48, 'Matches the blur backdrop to client corners; 12 px is a starting value, not automatic shape detection.'],
             ['Window opacity', 'translucency', 75, 100, '92% recommended; only used with whole-window translucency'],
         ]) {
@@ -56,7 +57,7 @@ export default class PrismPreferences extends ExtensionPreferences {
             ['Wallpaper-aware panel colors', 'Estimate clock and icon contrast from the wallpaper’s top band when it changes. Uses the primary wallpaper, not windows behind the panel; unsupported images fall back to appearance colors.', 'wallpaper-panel'],
             ['Stable backdrop redraws', 'Prevents partial-redraw patches while frosted surfaces are visible. Repaints full monitor frames on updates, which can use more GPU power. No continuous repainting.', 'stable-redraws'],
             ['Preserve native rounded corners', 'Keeps material inside rounded boundaries. Disable Rounded frosted glass below to fall back to clear translucency.', 'preserve-corners'],
-            ['Rounded frosted glass', 'Experimental GPU blur with rounded clipping for Shell surfaces and app backdrops. Capture failures fall back to translucency. GTK item menus use matched styling, without their own blur.', 'rounded-frost'],
+            ['Rounded frosted glass', 'GPU blur for rounded Shell surfaces and app backdrops. Separate app popups use their native alpha shape; embedded popovers cannot be targeted independently. Capture failures fall back to translucency.', 'rounded-frost'],
             ['Sidebar-only materials', 'Keeps every selected app at full opacity. The Prism launcher detects supported GTK4 sidebars; unknown layouts stay unchanged.', 'sidebar-materials'],
             ['Whole-window translucency', 'For opaque apps. Also fades text, images, and controls.', 'force-translucency'],
             ['Focused window only', 'Keeps background windows solid and reduces GPU work.', 'focused-only'],
@@ -99,7 +100,7 @@ export default class PrismPreferences extends ExtensionPreferences {
         for (const [title, key, min, subtitle] of [
             ['Top bar background opacity', 'panel-opacity', 0, '25% blends with the background. 0% removes the tint while keeping enabled blur. Clock text and symbolic icons use contrasting foreground colors.'],
             ['Shell background opacity', 'shell-opacity', 40, 'Applies to enabled menu, dock, notification, and dialog backgrounds. The top bar has its own control.'],
-            ['Application popup opacity', 'popup-opacity', 75, 'Separate app popup surfaces only; includes their text.'],
+            ['Application popup opacity', 'popup-opacity', 75, 'Separate app popups only. With frost, adjusts translucent fills while preserving opaque labels; without frost, fades the whole popup including text.'],
         ]) {
             const row = new Adw.SpinRow({title, subtitle,
                 adjustment: new Gtk.Adjustment({lower: min, upper: 100, step_increment: 1, page_increment: 5})});

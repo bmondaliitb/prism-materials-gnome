@@ -10,6 +10,9 @@ uniform vec2 prismOrigin;
 uniform vec2 prismBackdropSize;
 uniform float prismOpacity;
 uniform float prismBrightness;
+uniform vec4 prismVeil;
+uniform float prismNativeShape;
+uniform float prismNativeTintOpacity;
 `;
 export const FROST_CODE = `
 if (prismActive > 0.5) {
@@ -27,8 +30,20 @@ if (prismActive > 0.5) {
     // The separable blur has already run on a small texture. Keep foreground
     // and corner coverage at native resolution, with one backdrop lookup.
     vec3 blurred = texture2D(cogl_sampler1, clamp(uv, vec2(0.0), vec2(1.0))).rgb * prismBrightness;
+    blurred = mix(blurred, prismVeil.rgb, clamp(prismVeil.a, 0.0, 0.8));
     // Both actor texture and output use premultiplied alpha. Never fade text twice.
-    cogl_color_out = (cogl_color_out + vec4(blurred, 1.0) * max(0.0, prismOpacity - cogl_color_out.a)) * mask;
+    if (prismNativeShape > 0.5) {
+        // Apply frost only where the native client has substantial coverage.
+        // Transparent margins remain transparent; faint shadows are preserved.
+        // Opaque labels/icons need no backdrop contribution and remain sharp.
+        float clientAlpha = cogl_color_out.a / max(prismOpacity, 0.001);
+        float coverage = smoothstep(0.2, 0.75, clientAlpha);
+        float translucent = 1.0 - smoothstep(0.96, 0.999, clientAlpha);
+        cogl_color_out *= mix(1.0, clamp(prismNativeTintOpacity, 0.75, 1.0), coverage * translucent);
+        cogl_color_out += vec4(blurred, 1.0) * max(0.0, prismOpacity - cogl_color_out.a) * coverage;
+    } else {
+        cogl_color_out = (cogl_color_out + vec4(blurred, 1.0) * max(0.0, prismOpacity - cogl_color_out.a)) * mask;
+    }
 }
 `;
 

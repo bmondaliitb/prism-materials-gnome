@@ -179,13 +179,15 @@ export class ShellSurfaces {
             if (type === 'frost') {
                 saved.effect.radii = safe ? radii : [0, 0, 0, 0];
                 saved.effect.quality = quality;
+                saved.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
+                    Math.max(0, Math.min(80, this._settings.get_int('background-detail') ?? 25)) / 100];
             }
             if (saved.effect) {
                 const limit = type === 'native-panel' ? (quality === 'eco' ? 18 : quality === 'balanced' ? 32 : 80) : 80;
                 saved.effect.radius = Math.max(0, Math.min(limit, this._settings.get_int('blur-radius')));
                 saved.effect.brightness = kind === 'panel' ? 1 : (dark ? 0.85 : 1);
                 const paintKey = JSON.stringify([saved.effect.radius, saved.effect.brightness,
-                    saved.effect.radii, quality]);
+                    saved.effect.radii, saved.effect.veil, quality]);
                 // A hover/theme notification may reach refresh without changing
                 // the material. It must not invalidate every other backdrop.
                 if (saved.paintKey !== paintKey) {

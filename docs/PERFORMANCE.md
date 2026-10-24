@@ -1,3 +1,9 @@
+# Version 22: suppressing text-band artifacts
+
+Blur uses successive 2× downsample passes rather than jumping directly to a coarse texture. Its final reduction also accounts for blur radius and tap count so Gaussian taps do not skip whole reduced-image texels. This reduces aliasing and repeated text-row bands without increasing sample count per directional blur pass. The final Gaussian targets remain within the selected quality budget, but early prefilter targets can be larger than that budget (up to about a quarter of capture area); more small render passes and intermediate storage are the tradeoff for better filtering.
+
+Background detail reduction blends the filtered background toward a neutral material color in the final shader, with no extra texture fetch or pass. It defaults to 25%, ranges from 0–80%, and affects custom rounded frost only. It does not alter opaque foreground pixels, native top-bar blur, or no-blur mode. Dense terminal-like row patterns are covered by GPU pixel tests for all quality levels. Live screenshot matching is still unverified.
+
 # Version 17: stable backdrop redraws
 
 The earlier window-level culling guard does not disable monitor-level clipped redraws. The remaining hover patches are consistent with reading pixels outside the current monitor damage clip. Version 17 adds **Comfort and behavior → Stable backdrop redraws**, enabled by default, as a compatibility workaround.

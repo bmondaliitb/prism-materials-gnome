@@ -167,7 +167,9 @@ export default class Prism extends Extension {
         const quality = context.quality;
         const mode = quality === 'off' ? 'none' : 'frost';
         if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
-        if (s.get_boolean('preserve-corners') && !roundedFrost) {
+        if (isPopup || (s.get_boolean('preserve-corners') && !roundedFrost)) {
+            // Popup frost is attached to the client surface below; never put
+            // a second frame-sized plate behind native arrows and margins.
             // Meta.WindowActor doesn't expose the client's alpha silhouette.
             // Keep native client corners instead of inserting a square backdrop.
             state.layer?.destroy();
@@ -202,34 +204,71 @@ export default class Prism extends Extension {
             if (state.effect) {
                 state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
                 state.effect.brightness = dark ? 0.85 : 1.0;
+                state.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
+                    Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
             }
             const paintKey = JSON.stringify([style, state.effect?.radius,
-                state.effect?.brightness, state.effect?.radii, quality]);
+                state.effect?.brightness, state.effect?.radii, state.effect?.veil, quality]);
             if (state.paintKey !== paintKey) {
                 state.paintKey = paintKey;
                 state.layer.queue_redraw?.();
             }
         }
+        const popupFrost = isPopup && quality !== 'off' &&
+            (!s.get_boolean('preserve-corners') || roundedFrost);
+        if (state.popupEffect && !popupFrost) {
+            state.surface.remove_effect(state.popupEffect);
+            state.popupEffect = null;
+            state.popupPaintKey = null;
+        }
+        if (popupFrost) {
+            if (!state.popupEffect) {
+                state.popupEffect = new FrostEffect();
+                state.popupEffect.nativeShape = true;
+                state.surface.add_effect(state.popupEffect);
+            }
+            const dark = this._dark();
+            state.popupEffect.quality = quality;
+            state.popupEffect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
+            state.popupEffect.clientTintOpacity = Math.max(75, Math.min(100, s.get_int('popup-opacity'))) / 100;
+            state.popupEffect.brightness = dark ? 0.85 : 1;
+            state.popupEffect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
+                Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
+            const key = JSON.stringify([quality, state.popupEffect.radius,
+                state.popupEffect.brightness, state.popupEffect.veil, state.popupEffect.clientTintOpacity]);
+            if (key !== state.popupPaintKey) {
+                state.popupPaintKey = key;
+                state.surface.queue_redraw?.();
+            }
+        }
+        const hasFrost = Boolean(state.effect || state.popupEffect);
         // The frost layer is a child of MetaWindowActor. Without an effect on
         // the window actor itself, Mutter can cull/clip the windows below it and
         // our full-rectangle capture can contain stale damage tiles.
-        if (state.effect && !state.refreshEffect) {
+        if (hasFrost && !state.refreshEffect) {
             state.refreshEffect = new BackdropRefreshEffect();
             actor.add_effect(state.refreshEffect);
-        } else if (!state.effect && state.refreshEffect) {
+        } else if (!hasFrost && state.refreshEffect) {
             actor.remove_effect(state.refreshEffect);
             state.refreshEffect = null;
         }
-        this._redrawGuard?.track(state.layer, Boolean(state.effect));
+        this._redrawGuard?.track(state.layer ?? state.surface, hasFrost);
         let opacity = Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency')));
         if (s.get_boolean('material-hierarchy') && isDialog) opacity = Math.max(96, opacity);
-        state.surface.opacity = !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
+        // Native popup frost composites the translucent fill against the blur.
+        // Fading the entire client afterwards leaks sharp background text back
+        // through it. In this mode opacity controls the native fill in GLSL.
+        state.surface.opacity = popupFrost ? state.opacity : !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
             ? Math.round(state.opacity * opacity / 100)
             : state.opacity;
     }
 
     _clear(state) {
         if (state.layer) this._redrawGuard?.untrack(state.layer);
+        if (state.surface) this._redrawGuard?.untrack(state.surface);
+        if (state.popupEffect) state.surface?.remove_effect(state.popupEffect);
+        state.popupEffect = null;
+        state.popupPaintKey = null;
         if (state.surface) state.surface.opacity = state.opacity;
         if (state.refreshEffect) state.actor.remove_effect(state.refreshEffect);
         state.refreshEffect = null;

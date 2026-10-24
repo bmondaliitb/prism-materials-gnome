@@ -23,6 +23,8 @@ export function gtkMenuCss(dark, opacity) {
     --popover-fg-color: rgb(${fg});
     background-color: transparent;
     background-image: none;
+    border: none;
+    box-shadow: none;
     color: rgb(${fg});
   }
   popover.menu.background > contents {

@@ -2,7 +2,11 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 21:** six optional finishing features under **Comfort and behavior**: material hierarchy, active-window emphasis, glass edge highlights, gentle tint transitions, automatic comfort, and wallpaper-aware panel colors. They default on. See [behavior and limits](docs/EXPERIENCE.md). Automatic comfort uses Eco and focused app backdrops only on battery/power saver, without changing saved preferences.
+**New in version 23:** restores frost for separate app dropdowns and menus directly on the native client surface, using client alpha to leave transparent margins and faint shadows unfilled. No second backdrop plate. Popup opacity adjusts translucent fills in frost mode while opaque labels remain unchanged. Embedded popovers remain toolkit-owned.
+
+**Version 22:** improved downsampling to suppress text bands and introduced **Background detail reduction**, default 25%, for calmer frosted backgrounds. Native panel blur is unaffected.
+
+**Version 21:** six optional finishing features under **Comfort and behavior**: material hierarchy, active-window emphasis, glass edge highlights, gentle tint transitions, automatic comfort, and wallpaper-aware panel colors. See [behavior and limits](docs/EXPERIENCE.md).
 
 **Version 20:** restricted panel foreground styling to actual labels/icons and switched the top bar to native GNOME blur. Workspace dots and layouts keep their native styling; the independent 25% panel tint remains.
 

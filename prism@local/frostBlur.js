@@ -3,9 +3,12 @@ import {renderLevel} from './renderQuality.js';
 
 // Blur only a bounded, reduced-resolution image. Full-resolution compositing
 // stays a single sample, so adding a 4K window doesn't multiply blur work by 16.
-export function blurSize(width, height, quality = 'eco') {
+export function blurSize(width, height, quality = 'eco', radius = 0) {
     const level = renderLevel(quality);
     let factor = level.factor;
+    // Avoid skipping whole texels between Gaussian taps: regular text rows
+    // otherwise survive as bands or repeated ghost copies.
+    while (factor < Math.max(0, radius) / ((level.taps - 1) / 2)) factor *= 2;
     while (Math.ceil(width / factor) * Math.ceil(height / factor) > level.pixels) factor *= 2;
     return {width: Math.max(1, Math.ceil(width / factor)),
         height: Math.max(1, Math.ceil(height / factor)), factor};
@@ -70,13 +73,16 @@ export class BlurBuffer {
 
     render(texture, radius) {
         const width = texture.get_width(), height = texture.get_height();
-        const size = blurSize(width, height, this._quality);
-        const mid = this._target(0, size.width * 2, size.height * 2);
-        const small = this._target(1, size.width, size.height);
-        const horizontal = this._target(2, size.width, size.height);
-        const vertical = this._target(3, size.width, size.height);
-        this._draw(mid, this._downsample, texture, [0.25 / mid.width, 0.25 / mid.height]);
-        this._draw(small, this._downsample, mid.texture, [0.25 / small.width, 0.25 / small.height]);
+        const size = blurSize(width, height, this._quality, radius);
+        let small, index = 0;
+        for (let factor = 2; factor <= size.factor; factor *= 2) {
+            small = this._target(index++, Math.max(1, Math.ceil(width / factor)), Math.max(1, Math.ceil(height / factor)));
+            this._draw(small, this._downsample, texture, [0.25 / small.width, 0.25 / small.height]);
+            texture = small.texture;
+        }
+        const horizontal = this._target(index++, size.width, size.height);
+        const vertical = this._target(index++, size.width, size.height);
+        this._targets.length = index;
         this._draw(horizontal, this._blur, small.texture, [radius / (((this._level.taps - 1) / 2) * width), 0]);
         this._draw(vertical, this._blur, horizontal.texture, [0, radius / (((this._level.taps - 1) / 2) * height)]);
         return vertical.texture;
