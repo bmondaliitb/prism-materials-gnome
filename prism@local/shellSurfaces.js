@@ -38,6 +38,10 @@ export class ShellSurfaces {
             this._queue();
         }));
         ids.push(actor.connect('destroy', () => this._forget(actor)));
+        ids.push(actor.connect('notify::mapped', () => {
+            const effect = this._applied.get(actor)?.effect;
+            if (effect?.freezeBackdrop && actor.is_mapped?.()) effect.invalidateBackdrop();
+        }));
         // Non-St actors have no theme/style properties.
         if (typeof actor.get_style_class_name === 'function') {
             ids.push(actor.connect('notify::style-class', () => this._queue()));
@@ -191,7 +195,9 @@ export class ShellSurfaces {
             const quality = context.quality ?? this._settings.get_string('render-quality') ?? 'eco';
             // Short-lived switchers, OSDs and tooltips use native rounded tint
             // only. Never capture/filter the desktop for these overlays.
-            const type = role !== 'surface' || kind === 'overlays' || quality === 'off' ? null
+            const type = role !== 'surface' || kind === 'overlays' || quality === 'off' ||
+                (context.cachedBackdrop && kind === 'panel') ||
+                (context.powerSaver && (kind === 'panel' || kind === 'dock')) ? null
                 : kind === 'panel' ? (this._settings.get_boolean('panel-blur') && (!safe || (radii && !rounded)) ? 'native-panel' : null)
                 : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
                 : (!safe || (radii && !rounded)) ? 'frost' : null;
@@ -207,7 +213,8 @@ export class ShellSurfaces {
             if (type === 'frost') {
                 saved.effect.radii = safe ? radii : [0, 0, 0, 0];
                 saved.effect.quality = quality;
-                saved.effect.maxFps = this._settings.get_int('backdrop-fps') ?? 30;
+                saved.effect.freezeBackdrop = context.cachedBackdrop;
+                saved.effect.maxFps = context.backdropFps ?? this._settings.get_int('backdrop-fps') ?? 30;
                 saved.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
                     Math.max(0, Math.min(80, this._settings.get_int('background-detail') ?? 25)) / 100];
             }
@@ -216,7 +223,7 @@ export class ShellSurfaces {
                 saved.effect.radius = Math.max(0, Math.min(limit, this._settings.get_int('blur-radius')));
                 saved.effect.brightness = kind === 'panel' ? 1 : (dark ? 0.85 : 1);
                 const paintKey = JSON.stringify([saved.effect.radius, saved.effect.brightness,
-                    saved.effect.radii, saved.effect.veil, quality]);
+                    saved.effect.radii, saved.effect.veil, quality, saved.effect.maxFps, context.cachedBackdrop]);
                 // A hover/theme notification may reach refresh without changing
                 // the material. It must not invalidate every other backdrop.
                 if (saved.paintKey !== paintKey) {

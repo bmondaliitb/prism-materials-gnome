@@ -2,7 +2,11 @@
 
 A complete visual direction and experimental GNOME Shell 50 extension for soft, layered window materials, inspired by [Apple’s materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials).
 
-**New in version 30:** a material consistency audit removes stacked blur/tint in inline submenus, preserves native Shell border geometry, makes Glass edges off remove app highlights, dims disabled search details/icons consistently, and fixes restoration after a lock-screen blur effect is replaced. See [audit findings](docs/MATERIAL-AUDIT.md).
+**New in version 32:** **Rendering level → Cached frost · frozen background** reuses an Eco-blurred backdrop without live recapture while geometry stays unchanged. Window focus/material changes and reopened Shell popups refresh it; the top bar uses tint only. This trades live background updates for less capture/filter work. See [performance behavior](docs/PERFORMANCE.md).
+
+**Version 31:** Automatic comfort distinguishes battery from Power Saver. Battery retains enabled window materials with Eco blur at up to 20 fps. Power Saver keeps background-window tint, limits live window blur to the focused window at up to 12 fps, and keeps the top bar/dock translucent without blur. Saved appearance and selection settings remain unchanged. See [power policy](docs/PERFORMANCE.md).
+
+**Version 30:** a material consistency audit removes stacked blur/tint in inline submenus, preserves native Shell border geometry, makes Glass edges off remove app highlights, dims disabled search details/icons consistently, and fixes restoration after a lock-screen blur effect is replaced. See [audit findings](docs/MATERIAL-AUDIT.md).
 
 **Version 29:** the lock screen keeps your desktop wallpaper clear at the clock and shows a translucent password card over bounded native wallpaper blur. An optional Ubuntu GDM installer prepares the same wallpaper and card for the boot/logout login screen. See [setup and undo](docs/LOGIN.md).
 

@@ -11,7 +11,7 @@ const Manager = new Function('GLib', 'Shell', 'St', 'shellSurfaceKind', 'shellSu
     loop, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {isNative = true; set_enabled(value) { this.enabled = value; }}},
     {Label: class {static [Symbol.hasInstance](actor) { return actor.isLabel; }},
         Icon: class {static [Symbol.hasInstance](actor) { return actor.isIcon; }}},
-    shellSurfaceKind, shellSurfaceRole, class {isFrost = true;}, surfaceOpacity, panelIsDark);
+    shellSurfaceKind, shellSurfaceRole, class {isFrost = true; invalidateBackdrop() { this.invalidations = (this.invalidations ?? 0) + 1; }}, surfaceOpacity, panelIsDark);
 class Actor {
     constructor(classes = '', children = []) {
         this.classes = classes; this.children = children; this.style = 'border-radius: 8px;';
@@ -228,6 +228,24 @@ environment = {luminance: 0, animations: false, lowPower: true, quality: 'eco'};
 manager.refresh();
 assert(clock.style.includes('rgb(246,247,249)') && menu.style.includes('transition-duration: 0ms'), 'Wallpaper changes and reduced motion update panel foreground and stop transitions');
 assert(menu.effects[0].quality === 'eco', 'Comfort quality overrides Shell effects without changing saved settings');
+environment.powerSaver = true; environment.backdropFps = 12;
+manager.refresh();
+assert(panel.effects.length === 0 && dock.effects.length === 0 && panel.style.includes('background-color: rgba(') &&
+    dock.style.includes('background-color: rgba('), 'Power Saver keeps panel/dock tint without persistent native or custom blur');
+assert(menu.effects[0].quality === 'eco' && menu.effects[0].maxFps === 12,
+    'Transient Shell menus retain bounded Eco blur at the power-saving refresh limit');
+environment.powerSaver = false; environment.backdropFps = 20;
+manager.refresh();
+assert(panel.effects[0].isNative && dock.effects[0].isFrost && menu.effects[0].maxFps === 20,
+    'Ordinary battery mode restores panel/dock blur and applies the battery cap to custom surfaces');
+environment.cachedBackdrop = true;
+manager.refresh();
+assert(panel.effects.length === 0 && menu.effects[0].freezeBackdrop && dock.effects[0].freezeBackdrop,
+    'Cached mode freezes custom surfaces and removes continuously live native panel blur');
+menu.is_mapped = () => true;
+menu.emit('notify::mapped');
+assert(menu.effects[0].invalidations === 1, 'Reopening a Shell popup refreshes its frozen backdrop');
+environment.cachedBackdrop = false; manager.refresh();
 menu.set_style('external-style: preserved;');
 active = false; manager.refresh();
 assert([...overlays, dynamicOverlay].every(actor => actor.style === 'border-radius: 8px;'),

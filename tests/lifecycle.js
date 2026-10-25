@@ -1,6 +1,7 @@
 import GLib from 'gi://GLib';
 import {clientSurfaceRoot} from '../prism@local/windowSurface.js';
 import {eligible, materialStyle} from '../prism@local/materials.js';
+import {comfortPolicy} from '../prism@local/experience.js';
 const [, bytes] = GLib.file_get_contents('prism@local/extension.js');
 const source = new TextDecoder().decode(bytes).replace(/^import .*;\n/gm, '').replace('export default class Prism', 'class Prism');
 let destroyed = 0;
@@ -24,15 +25,16 @@ const settings = {};
 const motionStates = [];
 class MockFrost {
     isFrost = true;
+    invalidateBackdrop() { this.invalidations = (this.invalidations ?? 0) + 1; }
     static setWorkspaceMotion(active) { motionStates.push(active); }
 }
 const shellMain = {overview: {visible: false}, sessionMode: {isLocked: false},
     wm: {_workspaceAnimation: {_switchData: null}}};
 for (const method of ['get_boolean', 'get_strv', 'get_int', 'get_string']) settings[method] = key => values[key];
-const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'BackdropRefreshEffect', 'gtkMenuCss',
+const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'BackdropRefreshEffect', 'gtkMenuCss', 'comfortPolicy',
     source + '\nreturn Prism;')(
     class {}, {}, {WindowType: {NORMAL: 0, MENU: 1, DROPDOWN_MENU: 2, POPUP_MENU: 3, TOOLTIP: 4, COMBO: 5, DIALOG: 6, MODAL_DIALOG: 7, UTILITY: 8, TOOLBAR: 9, DESKTOP: 10}}, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {}}, {Widget},
-    shellMain, {display: {focus_window: win}}, eligible, materialStyle, MockFrost, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`);
+    shellMain, {display: {focus_window: win}}, eligible, materialStyle, MockFrost, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`, comfortPolicy);
 const extension = new Prism();
 extension._settings = settings;
 extension._tracker = {get_window_app: () => ({get_id: () => 'test.desktop'})};
@@ -149,19 +151,39 @@ values['gentle-transitions'] = true;
 extension._experience = {state: {highContrast: true, lowPower: false, animations: true}};
 extension._update(actor, state);
 assert(state.layer === null && surface.opacity === 240, 'System high contrast suspends window effects and restores original opacity');
-extension._experience.state = {highContrast: false, lowPower: true, animations: false};
+extension._experience.state = {highContrast: false, onBattery: true, powerSaver: false, animations: false};
 values['render-quality'] = 'high';
 extension._update(actor, state);
 assert(state.effect.quality === 'eco' && state.layer.style.includes('transition-duration: 0ms'), 'Battery mode selects Eco and disables tint transitions');
+assert(state.effect.maxFps === 20, 'Battery mode caps focused-window capture refresh at 20 fps');
 assert(values['render-quality'] === 'high', 'Automatic comfort does not rewrite the saved quality setting');
 extension._clear(state);
 values['focused-only'] = false;
 const backgroundState = {window: {...win}, layer: null};
 extension._update(actor, backgroundState);
-assert(backgroundState.layer === null, 'Battery mode limits app backdrops to the focused app even with all-window scope');
+assert(backgroundState.effect?.quality === 'eco' && backgroundState.effect.maxFps === 20 && surface.opacity === 221,
+    'Battery mode retains background-window translucency and bounded Eco blur with all-window scope');
+extension._clear(backgroundState);
+extension._experience.state.powerSaver = true;
+extension._update(actor, backgroundState);
+assert(backgroundState.layer !== null && !backgroundState.effect && surface.opacity === 221 && actor.effects.length === 0,
+    'Power Saver keeps background-window tint and opacity without backdrop capture or a culling guard');
+extension._clear(backgroundState);
+extension._update(actor, state);
+assert(state.effect?.quality === 'eco' && state.effect.maxFps === 12,
+    'Power Saver retains focused-window blur at up to 12 fps');
+extension._clear(state);
+values['focused-only'] = true;
+extension._update(actor, backgroundState);
+assert(backgroundState.layer === null && surface.opacity === 240, 'Explicit focused-only preference remains authoritative');
+values['focused-only'] = false;
+extension._experience.state = {highContrast: false, onBattery: false, powerSaver: false, animations: true};
+extension._update(actor, backgroundState);
+assert(backgroundState.effect?.quality === 'high' && backgroundState.effect.maxFps === 30 && surface.opacity === 221,
+    'Leaving battery/Power Saver restores saved quality and refresh rate without losing translucency');
+extension._clear(backgroundState);
 values['auto-comfort'] = false;
 assert(extension._context().quality === 'high', 'Automatic comfort can be disabled independently');
-extension._experience.state.lowPower = false;
 values['gtk-menus'] = true;
 extension._gtkMenus = {apply: () => writes++};
 extension._syncGtkMenus();
@@ -199,5 +221,15 @@ assert(motionStates.join() === 'true,false' && values['render-quality'] === 'hig
 shellMain.wm._workspaceAnimation._switchData = {};
 values['smooth-workspaces'] = false;
 assert(!extension._syncWorkspaceMotion(), 'Workspace optimization can be disabled');
+extension._clear(state);
+values['render-quality'] = 'cached';
+extension._update(actor, state);
+assert(state.effect.quality === 'eco' && state.effect.freezeBackdrop && state.effect.invalidations === 1,
+    'Cached quality selects Eco frozen capture and refreshes when the window gains focus');
+extension._update(actor, state);
+assert(state.effect.invalidations === 1, 'Repeated updates do not invalidate a stationary focused snapshot');
+values['render-quality'] = 'high';
+extension._update(actor, state);
+assert(!state.effect.freezeBackdrop && state.effect.quality === 'high', 'Switching back restores live rendering');
 extension._clear(state);
 print('Lifecycle and focus hot-path checks passed');

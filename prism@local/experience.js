@@ -2,6 +2,19 @@ import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 
 // Small, pure policies are shared by Shell, app backdrops, and tests.
+export function comfortPolicy(state, automatic, quality, savedFps) {
+    const onBattery = Boolean(automatic && state.onBattery);
+    const powerSaver = Boolean(automatic && state.powerSaver);
+    const lowPower = onBattery || powerSaver;
+    const fps = Math.max(0, Math.min(60, savedFps ?? 30));
+    const cap = powerSaver ? 12 : onBattery ? 20 : 0;
+    return {...state, onBattery, powerSaver, lowPower,
+        cachedBackdrop: quality === 'cached',
+        quality: quality === 'cached' || (lowPower && quality !== 'off') ? 'eco' : quality,
+        backdropFps: cap ? Math.min(fps || cap, cap) : fps,
+        blurFocusedOnly: powerSaver};
+}
+
 export function surfaceOpacity(kind, alpha, hierarchy) {
     if (!hierarchy) return alpha;
     const offset = {dialogs: 0.08, notifications: 0.05, dock: -0.1}[kind] ?? 0;
@@ -39,7 +52,8 @@ export function wallpaperLuminance(pixbuf) {
 
 export class Experience {
     constructor(settings, interfaceSettings, changed) {
-        this.state = {highContrast: false, lowPower: false, animations: true, luminance: null};
+        this.state = {highContrast: false, onBattery: false, powerSaver: false,
+            lowPower: false, animations: true, luminance: null};
         this._settings = settings;
         this._interface = interfaceSettings;
         this._changed = changed;
@@ -82,8 +96,9 @@ export class Experience {
     _sync() {
         this.state.highContrast = this._a11y.get_boolean('high-contrast');
         this.state.animations = this._interface.get_boolean('enable-animations');
-        this.state.lowPower = Boolean(this._battery?.get_cached_property('OnBattery')?.deep_unpack()) ||
-            this._power?.get_cached_property('ActiveProfile')?.deep_unpack() === 'power-saver';
+        this.state.onBattery = Boolean(this._battery?.get_cached_property('OnBattery')?.deep_unpack());
+        this.state.powerSaver = this._power?.get_cached_property('ActiveProfile')?.deep_unpack() === 'power-saver';
+        this.state.lowPower = this.state.onBattery || this.state.powerSaver;
         this._changed?.();
     }
 

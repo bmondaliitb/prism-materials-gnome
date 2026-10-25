@@ -158,6 +158,23 @@ effect._actor.is_in_clone_paint = () => true;
 effect.vfunc_paint(null, invalidAnimationContext, 0);
 assert(copies === animationCopies + 1, 'Other clone/screenshot paints never read invalid live-backdrop matrices');
 effect._actor.is_in_clone_paint = () => false;
+effect.freezeBackdrop = true;
+effect.invalidateBackdrop();
+effect._updateBackdrop(context);
+const frozenCopies = copies;
+for (let frame = 0; frame < 120; frame++) {
+    now += 1000000;
+    Effect.cancelPendingRefresh();
+    effect._updateBackdrop(context);
+}
+assert(copies === frozenCopies && timers.size === 0,
+    'Cached frost reuses one capture across background changes/time/shared epochs without refresh timers');
+effect.invalidateBackdrop(); effect._updateBackdrop(context);
+assert(copies === frozenCopies + 1, 'Focus or popup-open invalidation refreshes a frozen backdrop once');
+effect.radius += 1; effect._updateBackdrop(context);
+assert(copies === frozenCopies + 2, 'Blur setting changes invalidate a cached snapshot');
+effect.freezeBackdrop = false; effect._updateBackdrop(context);
+assert(copies === frozenCopies + 3, 'Returning to live frost immediately restores backdrop capture');
 assert(Math.abs(capture.rect.x - 10) <= 1 && Math.abs(capture.rect.y - 20) <= 1 && Math.abs(capture.basis[0] - 100) < 0.01,
     'Nested offscreen coordinates remain independent of monitor origin');
 const [, blurBytes] = GLib.file_get_contents('prism@local/frostBlur.js');

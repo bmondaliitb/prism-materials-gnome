@@ -16,7 +16,7 @@ import {clientSurfaceRoot} from './windowSurface.js';
 import {FrostEffect} from './frostEffect.js';
 import {GtkMenuStyle, gtkMenuCss} from './gtkMenus.js';
 import {ShellSurfaces} from './shellSurfaces.js';
-import {Experience} from './experience.js';
+import {Experience, comfortPolicy} from './experience.js';
 import {OverviewMaterial} from './overviewMaterial.js';
 import {LockMaterial} from './lockMaterial.js';
 
@@ -116,8 +116,7 @@ export default class Prism extends Extension {
         const state = this._experience?.state ?? {};
         const automatic = this._settings.get_boolean('auto-comfort');
         const quality = this._settings.get_string('render-quality') ?? 'eco';
-        return {...state, lowPower: automatic && state.lowPower,
-            quality: automatic && state.lowPower && quality !== 'off' ? 'eco' : quality};
+        return comfortPolicy(state, automatic, quality, this._settings.get_int('backdrop-fps'));
     }
 
     _reduced() {
@@ -188,7 +187,7 @@ export default class Prism extends Extension {
                     (isDialog && s.get_boolean('window-dialogs')),
                 fullscreen: w.is_fullscreen(), minimized: w.minimized,
                 focused,
-                focusOnly: s.get_boolean('focused-only') || context.lowPower,
+                focusOnly: s.get_boolean('focused-only'),
                 app: ownerApp,
                 allApplications: s.get_boolean('all-applications'),
                 applications: s.get_strv('applications'),
@@ -201,7 +200,7 @@ export default class Prism extends Extension {
             state.opacity = state.surface.opacity;
         }
         const roundedFrost = s.get_boolean('preserve-corners') && s.get_boolean('rounded-frost');
-        const quality = context.quality;
+        const quality = context.blurFocusedOnly && !focused ? 'off' : context.quality;
         const mode = quality === 'off' ? 'none' : 'frost';
         if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
         if (isPopup || (s.get_boolean('preserve-corners') && !roundedFrost)) {
@@ -231,7 +230,8 @@ export default class Prism extends Extension {
             if (state.effect) {
                 state.effect.radii = roundedFrost ? [radius, radius, radius, radius] : [0, 0, 0, 0];
                 state.effect.quality = quality;
-                state.effect.maxFps = s.get_int('backdrop-fps') ?? 30;
+                state.effect.freezeBackdrop = context.cachedBackdrop;
+                state.effect.maxFps = context.backdropFps;
             }
             const style = materialStyle(s.get_string('preset'), dark, {
                 focused, emphasis: s.get_boolean('focus-emphasis') && !isPopup && !isDialog,
@@ -246,7 +246,7 @@ export default class Prism extends Extension {
                     Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
             }
             const paintKey = JSON.stringify([style, state.effect?.radius,
-                state.effect?.brightness, state.effect?.radii, state.effect?.veil, quality]);
+                state.effect?.brightness, state.effect?.radii, state.effect?.veil, quality, state.effect?.maxFps, context.cachedBackdrop]);
             if (state.paintKey !== paintKey) {
                 state.paintKey = paintKey;
                 state.layer.queue_redraw?.();
@@ -267,20 +267,26 @@ export default class Prism extends Extension {
             }
             const dark = this._dark();
             state.popupEffect.quality = quality;
-            state.popupEffect.maxFps = s.get_int('backdrop-fps') ?? 30;
+            state.popupEffect.freezeBackdrop = context.cachedBackdrop;
+            state.popupEffect.maxFps = context.backdropFps;
             state.popupEffect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
             state.popupEffect.clientTintOpacity = Math.max(75, Math.min(100, s.get_int('popup-opacity'))) / 100;
             state.popupEffect.brightness = dark ? 0.85 : 1;
             state.popupEffect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
                 Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
             const key = JSON.stringify([quality, state.popupEffect.radius,
-                state.popupEffect.brightness, state.popupEffect.veil, state.popupEffect.clientTintOpacity]);
+                state.popupEffect.brightness, state.popupEffect.veil, state.popupEffect.clientTintOpacity, state.popupEffect.maxFps, context.cachedBackdrop]);
             if (key !== state.popupPaintKey) {
                 state.popupPaintKey = key;
                 state.surface.queue_redraw?.();
             }
         }
         const hasFrost = Boolean(state.effect || state.popupEffect);
+        if (context.cachedBackdrop && state.cachedFocus !== focused) {
+            state.effect?.invalidateBackdrop?.();
+            state.popupEffect?.invalidateBackdrop?.();
+        }
+        state.cachedFocus = focused;
         // The frost layer is a child of MetaWindowActor. Without an effect on
         // the window actor itself, Mutter can cull/clip the windows below it and
         // our full-rectangle capture can contain stale damage tiles.
@@ -315,6 +321,7 @@ export default class Prism extends Extension {
         state.layer = null;
         state.surface = null;
         state.effect = null;
+        state.cachedFocus = null;
     }
 
     disable() {

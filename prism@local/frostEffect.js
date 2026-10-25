@@ -64,6 +64,8 @@ class FrostEffect extends Shell.GLSLEffect {
         this.nativeShape = false;
         this.clientTintOpacity = 1;
         this.maxFps = 30;
+        this.freezeBackdrop = false;
+        this._cacheVersion = 0;
         this._sources = new Map();
         this._capture = null;
         this._texture = null;
@@ -76,6 +78,12 @@ class FrostEffect extends Shell.GLSLEffect {
 
     vfunc_build_pipeline() {
         this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT, FROST_DECLARATIONS, FROST_CODE, false);
+    }
+
+    invalidateBackdrop() {
+        this._cacheVersion++;
+        cancelDeferred(this);
+        this.queue_repaint();
     }
 
     _report(error) {
@@ -116,7 +124,7 @@ class FrostEffect extends Shell.GLSLEffect {
             if (!capture) return false;
             const {rect} = capture;
             const signature = JSON.stringify([rect, capture.basis, capture.origin,
-                capture.scale, this.radius, this.quality]);
+                capture.scale, this.radius, this.quality, this.freezeBackdrop, this._cacheVersion]);
             const now = GLib.get_monotonic_time();
             let cached = this._sources.get(source);
             // Separate storage avoids reallocating a single capture repeatedly
@@ -127,6 +135,11 @@ class FrostEffect extends Shell.GLSLEffect {
                 this._blurBuffer = cached.blurBuffer;
                 this._bufferQuality = cached.quality;
                 this._blurred = cached.blurred;
+                if (this.freezeBackdrop && cached.signature === signature) {
+                    cancelDeferred(this);
+                    this._capture = capture;
+                    return true;
+                }
                 if (this.maxFps > 0 && cached.epoch === refreshEpoch && cached.signature === signature &&
                     now - cached.time < 1000000 / this.maxFps) {
                     deferBackdrop(this, 1000000 / this.maxFps - (now - cached.time));

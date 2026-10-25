@@ -32,9 +32,9 @@ export default class PrismPreferences extends ExtensionPreferences {
             group.add(row);
         };
         combo('Material finish', 'preset', ['clear', 'frosted', 'soft'], ['Clear · a little atmosphere', 'Frosted · everyday balance', 'Soft · stronger separation']);
-        combo('Rendering level', 'render-quality', ['eco', 'balanced', 'high', 'off'],
-            ['Eco · integrated GPU (default)', 'Balanced · smoother frost', 'High · finer detail', 'Translucency only · no blur']);
-        group.add(new Adw.ActionRow({title: 'Rendering cost', subtitle: 'Eco uses smaller blur textures and fewer samples for windows and Shell surfaces. Translucency only removes blur and backdrop capture. GTK app menus keep their CSS styling.'}));
+        combo('Rendering level', 'render-quality', ['eco', 'balanced', 'high', 'cached', 'off'],
+            ['Eco · integrated GPU (default)', 'Balanced · smoother frost', 'High · finer detail', 'Cached frost · frozen background', 'Translucency only · no blur']);
+        group.add(new Adw.ActionRow({title: 'Rendering cost', subtitle: 'Cached frost uses Eco blur once per backdrop position, then freezes background content until focus, geometry, or material changes. Shell popups refresh when reopened; top bar uses tint only. Translucency only removes blur entirely. GTK app menus keep their CSS styling.'}));
         combo('Appearance', 'appearance', ['auto', 'light', 'dark'], ['Follow desktop', 'Light', 'Dark']);
         for (const [title, key, min, max, subtitle] of [
             ['Blur radius', 'blur-radius', 0, 80, 'Higher values soften more background detail'],
@@ -66,7 +66,7 @@ export default class PrismPreferences extends ExtensionPreferences {
             ['Active-window emphasis', 'Clearer backdrop edges on the focused app, quieter tint on inactive apps. Most visible when Focused window only is off.', 'focus-emphasis'],
             ['Glass edge highlights', 'Fine highlights on application backdrops and Shell menus, without extra blur passes.', 'glass-edges'],
             ['Gentle tint transitions', '140 ms native color transitions. Respects GNOME animations and is suspended on battery or power saver with Automatic comfort enabled.', 'gentle-transitions'],
-            ['Automatic comfort', 'Restore native styling in system high contrast. Use Eco and focused app backdrops only on battery or power saver, without changing saved preferences.', 'auto-comfort'],
+            ['Automatic comfort', 'Keep enabled windows translucent on battery with Eco blur at up to 20 fps. Power Saver uses up to 12 fps, blurs only the focused window, and keeps top bar/dock tint without blur. Restores native styling in high contrast; saved preferences stay unchanged.', 'auto-comfort'],
             ['Wallpaper-aware panel colors', 'Estimate clock and icon contrast from the wallpaper’s top band when it changes. Uses the primary wallpaper, not windows behind the panel; unsupported images fall back to appearance colors.', 'wallpaper-panel'],
             ['Stable backdrop redraws', 'Prevents partial-redraw patches while frosted surfaces are visible. Repaints full monitor frames on updates, which can use more GPU power. No continuous repainting.', 'stable-redraws'],
             ['Smooth workspace transitions', 'Reuse existing frost during workspace slides and pause top-bar blur until they finish. Restores live effects afterward; no change to saved rendering quality.', 'smooth-workspaces'],

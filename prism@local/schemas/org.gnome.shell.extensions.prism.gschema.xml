@@ -11,9 +11,9 @@
   <key name="appearance" type="s"><default>'auto'</default></key>
   <key name="render-quality" type="s">
    <default>'eco'</default>
-   <choices><choice value="eco"/><choice value="balanced"/><choice value="high"/><choice value="off"/></choices>
+   <choices><choice value="eco"/><choice value="balanced"/><choice value="high"/><choice value="cached"/><choice value="off"/></choices>
    <summary>Rendering level</summary>
-   <description>Eco reduces blur texture size and samples. Off keeps translucency without backdrop capture or blur.</description>
+   <description>Eco reduces blur texture size and samples. Cached reuses an Eco-blurred frozen backdrop until focus, geometry, or material changes. Off keeps translucency without backdrop capture or blur.</description>
   </key>
   <key name="blur-radius" type="i"><default>36</default></key>
   <key name="background-detail" type="i"><range min="0" max="80"/><default>25</default></key>
