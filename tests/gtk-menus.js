@@ -1,6 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {GtkMenuStyle, gtkMenuCss, withoutManagedMenuCss} from '../prism@local/gtkMenus.js';
+import {surfacePalette, MATERIAL_STATES} from '../prism@local/materials.js';
 function assert(value, message) { if (!value) throw new Error(message); }
 const directory = GLib.dir_make_tmp('prism-gtk-menus-XXXXXX');
 const style = new GtkMenuStyle(directory);
@@ -13,7 +14,13 @@ assert(read(style.main).includes('popover.menu.background > contents') && !read(
 assert(withoutManagedMenuCss('/* BEGIN PRISM GTK MENUS */\n@import url("prism-managed-menus.css");\n/* END PRISM GTK MENUS */\n' + original) === original, 'Legacy import migrates without losing original rules');
 assert(read(style.main).endsWith(original), 'Existing GTK rules preserved byte-for-byte');
 assert(read(style.generated).includes('popover.menu.background > contents') && read(style.generated).includes('popover.menu button.model'), 'Modern GTK menu backgrounds and rows are both targeted');
-assert(read(style.generated).includes('rgba(24,27,36,0.85)'), 'Same dark palette and opacity as Shell menu');
+assert(read(style.generated).includes(`rgba(${surfacePalette(true).background},0.85)`), 'Same dark palette and opacity as Shell menu');
+for (const dark of [true, false]) {
+    const css = gtkMenuCss(dark, 85), palette = surfacePalette(dark);
+    assert(css.includes(`rgba(${palette.edge})`), 'GTK menus share the Shell material edge palette');
+    for (const value of [MATERIAL_STATES.hover, MATERIAL_STATES.focus, MATERIAL_STATES.pressed])
+        assert(css.includes(`rgba(${palette.highlight},${value})`), 'GTK rows share the material interaction levels');
+}
 style.apply(gtkMenuCss(false, 65));
 assert(read(style.main).split('BEGIN PRISM GTK MENUS').length === 2, 'Exactly one managed import after updates');
 assert(read(style.generated).includes('rgba(240,244,252,0.65)'), 'Appearance/opacity update');

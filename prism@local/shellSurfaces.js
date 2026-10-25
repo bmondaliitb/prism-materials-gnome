@@ -2,7 +2,7 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {FrostEffect} from './frostEffect.js';
-import {shellSurfaceKind, shellSurfaceRole} from './materials.js';
+import {shellSurfaceKind, shellSurfaceRole, surfacePalette} from './materials.js';
 import {surfaceOpacity, panelIsDark} from './experience.js';
 
 // Event-driven discovery also covers menus/docks created after Prism is enabled.
@@ -44,7 +44,7 @@ export class ShellSurfaces {
         }));
         // Non-St actors have no theme/style properties.
         if (typeof actor.get_style_class_name === 'function') {
-            ids.push(actor.connect('notify::style-class', () => this._queue()));
+            ids.push(actor.connect('notify::style-class', () => { if (!this._settingStyle) this._queue(); }));
             ids.push(actor.connect('notify::name', () => this._queue()));
             const changed = () => {
                 // Hovering a label/row must not rescan the entire Shell tree.
@@ -74,6 +74,7 @@ export class ShellSurfaces {
         if (!saved) return;
         this._redrawGuard?.untrack(actor);
         if (saved.effect) actor.remove_effect(saved.effect);
+        this._syncClass(actor, saved, null);
         // Preserve an external extension's later inline change, if there is one.
         if (actor.get_style() === saved.appliedStyle) {
             this._settingStyle = true;
@@ -89,6 +90,17 @@ export class ShellSurfaces {
         for (const id of this._watched.get(actor) ?? []) actor.disconnect(id);
         this._watched.delete(actor);
         this._parents.delete(actor);
+    }
+
+    _syncClass(actor, saved, name) {
+        if (saved.materialClass === name) return;
+        this._settingStyle = true;
+        try {
+            if (saved.ownsClass) actor.remove_style_class_name(saved.materialClass);
+            saved.materialClass = name;
+            saved.ownsClass = Boolean(name && !actor.has_style_class_name(name));
+            if (saved.ownsClass) actor.add_style_class_name(name);
+        } finally { this._settingStyle = false; }
     }
 
     _unwatch(actor) {
@@ -167,7 +179,8 @@ export class ShellSurfaces {
         const active = this._permitted();
         const dark = this._isDark();
         const context = this._context();
-        const tint = dark ? '24,27,36' : '240,244,252';
+        const palette = surfacePalette(dark);
+        const tint = palette.background;
         const alpha = Math.max(40, Math.min(100, this._settings.get_int('shell-opacity'))) / 100;
         const panelAlpha = Math.max(0, Math.min(100, this._settings.get_int('panel-opacity'))) / 100;
         const panelTint = dark ? '32,34,38' : '218,222,228';
@@ -189,6 +202,8 @@ export class ShellSurfaces {
             } else if (actor.get_style() !== saved.appliedStyle) {
                 saved.style = actor.get_style();
             }
+            this._syncClass(actor, saved, role === 'surface' && kind !== 'panel'
+                ? `prism-material-${kind === 'overlays' || dark ? 'dark' : 'light'}` : null);
             const radii = role === 'surface' ? this._radii(actor, kind) : null;
             const safe = this._settings.get_boolean('preserve-corners');
             const rounded = radii?.some(radius => radius > 0);
@@ -237,19 +252,20 @@ export class ShellSurfaces {
             const materialAlpha = surfaceOpacity(kind, alpha, this._settings.get_boolean('material-hierarchy'));
             const background = role === 'surface'
                 ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})`
-                    : `rgba(${kind === 'overlays' ? '25,28,35' : tint},${materialAlpha})`) : 'transparent';
+                    : `rgba(${kind === 'overlays' ? surfacePalette(true).background : tint},${materialAlpha})`) : 'transparent';
             const pointer = role === 'pointer' ? '-arrow-background-color: transparent !important;'
                 : role === 'pointer-fill' ? `-arrow-background-color: rgba(${tint},${materialAlpha}) !important;` : '';
             const base = saved.style?.trim() ?? '';
             // Native OSD levels and switcher rows use a light foreground even
             // in light mode; keep their backing dark and their colors intact.
             const foreground = role === 'foreground' ? `color: rgb(${panelForeground}) !important;`
-                : kind === 'overlays' ? 'color: rgb(242,242,242) !important;' : '';
+                : role === 'surface' && kind !== 'panel'
+                    ? `color: rgb(${surfacePalette(kind === 'overlays' || dark).foreground}) !important;` : '';
             const fill = role === 'foreground' ? ''
                 : `background-image: none !important; background-color: ${background} !important; ${pointer}`;
             const edge = role === 'surface' && kind !== 'panel' && this._settings.get_boolean('glass-edges')
                 && kind !== 'overlays'
-                ? `border-color: rgba(${dark ? '255,255,255,0.18' : '255,255,255,0.5'});` : '';
+                ? `border-color: rgba(${palette.edge});` : '';
             const transition = role === 'surface' && kind !== 'overlays' ? `transition-duration: ${this._settings.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower ? 140 : 0}ms;` : '';
             saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge} ${transition}`;
             if (actor.get_style() !== saved.appliedStyle) {

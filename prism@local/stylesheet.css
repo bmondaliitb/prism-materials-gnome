@@ -90,3 +90,48 @@
 .prism-overview-material .search-entry:insensitive .search-entry-icon {
     color: rgba(242, 242, 242, 0.4);
 }
+
+/* Shared material interaction levels: hover .12, focus/selection .16,
+ * pressed .22. Preserve native focus rings, status controls, and geometry. */
+.prism-material-dark .popup-menu-item {
+    color: #f2f2f2;
+}
+.prism-material-light .popup-menu-item {
+    color: rgb(28, 30, 40);
+}
+.prism-material-dark .popup-menu-item:hover,
+.prism-material-dark.switcher-list .item-box:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #f2f2f2;
+}
+.prism-material-dark .popup-menu-item:focus,
+.prism-material-dark .popup-menu-item:selected,
+.prism-material-dark.switcher-list .item-box:focus,
+.prism-material-dark.switcher-list .item-box:selected {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #f2f2f2;
+}
+.prism-material-dark .popup-menu-item:active,
+.prism-material-dark.switcher-list .item-box:active {
+    background-color: rgba(255, 255, 255, 0.22);
+    color: #f2f2f2;
+}
+.prism-material-light .popup-menu-item:hover {
+    background-color: rgba(28, 30, 40, 0.12);
+    color: rgb(28, 30, 40);
+}
+.prism-material-light .popup-menu-item:focus,
+.prism-material-light .popup-menu-item:selected {
+    background-color: rgba(28, 30, 40, 0.16);
+    color: rgb(28, 30, 40);
+}
+.prism-material-light .popup-menu-item:active {
+    background-color: rgba(28, 30, 40, 0.22);
+    color: rgb(28, 30, 40);
+}
+.prism-material-dark .popup-menu-item:insensitive {
+    color: rgba(242, 242, 242, 0.4);
+}
+.prism-material-light .popup-menu-item:insensitive {
+    color: rgba(28, 30, 40, 0.4);
+}
