@@ -46,13 +46,24 @@ scale=1;width=101;height=81;effect._updateBackdrop(context);
 assert(effect._texture.get_width()===effect._capture.rect.width&&effect._texture.get_width()<128,
     'Resize uses exact capture storage without padding outside repainted bounds');
 const beforeMotion=copies;
+Effect.setInteractiveMotion(true);
+for(let i=0;i<120;i++) {
+    width++;height++;
+    effect.vfunc_paint(null,context,0);
+}
+assert(copies===beforeMotion,'Interactive resize reuses frost with no per-frame capture or filter');
+Effect.setInteractiveMotion(false);
+effect.invalidateBackdrop();effect.vfunc_paint(null,context,0);
+assert(copies===beforeMotion+1&&effect._capture.rect.width>=width,
+    'Release captures final geometry once');
+const afterGrab=copies;
 Effect.setWorkspaceMotion(true);
 const invalidContext={get_framebuffer:()=>{throw Error('Clone matrices must not be read');}};
 for(let i=0;i<60;i++)effect.vfunc_paint(null,invalidContext,0);
 Effect.setWorkspaceMotion(false);
-assert(copies===beforeMotion,'Workspace animation performs no new captures');
+assert(copies===afterGrab,'Workspace animation performs no new captures');
 clone=true;effect.vfunc_paint(null,invalidContext,0);clone=false;
-assert(copies===beforeMotion,'Other clone paints reuse the snapshot safely');
+assert(copies===afterGrab,'Other clone paints reuse the snapshot safely');
 effect.vfunc_paint(null,context,2);effect.vfunc_paint_target(null,context);
 assert(uniforms.get('prismActive')[0]===0,'Native bypass disables the material pipeline for that paint');
 effect._updateBackdrop(context);

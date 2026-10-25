@@ -245,8 +245,13 @@ export class ShellSurfaces {
                     ? `color: rgb(${surfacePalette(kind === 'overlays' || dark).foreground}) !important;` : '';
             const fill = role === 'foreground' ? ''
                 : `background-image: none !important; background-color: ${background} !important; ${pointer}`;
-            const edge = role === 'surface' && kind !== 'panel' && kind !== 'overlays'
-                ? `border-color: rgba(${palette.edge});` : '';
+            // An inset rim is visible even when the dock theme has zero border
+            // width. It follows native radii without changing allocation, icon
+            // spacing, input regions or adding another capture/effect actor.
+            const edge = role === 'surface' && kind === 'dock'
+                ? `border-color: transparent; box-shadow: inset 0 0 0 1px rgba(${palette.edge}) !important;`
+                : role === 'surface' && kind !== 'panel' && kind !== 'overlays'
+                    ? `border-color: rgba(${palette.edge});` : '';
             saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge}`;
             if (actor.get_style() !== saved.appliedStyle) {
                 this._settingStyle = true;

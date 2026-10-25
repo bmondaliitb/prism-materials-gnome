@@ -211,7 +211,7 @@ assert new_contrast>old_contrast*1.8 and new_contrast>=15, (old_contrast,new_con
 print(f'{quality} opaque-app composite: backdrop contrast {old_contrast} -> {new_contrast} levels')
 contrasts={name:app_backdrop_contrast(values['opacity'],values['detail'])
            for name,values in profile['profiles'].items()}
-order=['subtle','balanced','airy','mist','glass','crystal']
+order=['subtle','balanced','airy','mist']
 assert all(contrasts[second]>contrasts[first] for first,second in zip(order,order[1:])), contrasts
 print(f'{quality} coordinated presets, backdrop contrast: {contrasts}')
 assert bind(G,'glGetError',U)()==0,'GL error'

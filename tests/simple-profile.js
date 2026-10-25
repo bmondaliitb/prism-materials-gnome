@@ -27,7 +27,16 @@ for (const id of Object.keys(DESKTOP_PROFILES)) {
     assert(!settings.get_boolean('enabled') && settings.get_boolean('reduce-transparency') &&
         settings.get_string('appearance')==='dark', 'Preset changes preserve accessibility, master and appearance');
 }
-const order=['crystal','glass','mist','airy','balanced','subtle'];
+const order=['mist','airy','balanced','subtle'];
+assert(Object.keys(DESKTOP_PROFILES).length===4, 'Only four named presets remain');
+for (const [id,strength] of [['glass',15],['crystal',0]]) {
+    settings.set_int('simple-profile-version',5);
+    settings.set_string('desktop-profile',id);
+    settings.set_int('material-strength',strength);
+    initializeProfile(settings);
+    assert(settings.get_string('desktop-profile')==='custom' && settings.get_int('material-strength')===strength,
+        'Retired presets migrate to Custom without changing their appearance');
+}
 for(let i=1;i<order.length;i++) assert(opacity[order[i-1]]<opacity[order[i]], 'Preset densities stay ordered');
 settings.set_int('simple-profile-version',3);
 settings.set_string('desktop-profile','macos');

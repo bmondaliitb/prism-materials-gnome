@@ -1,6 +1,6 @@
 # Prism Materials
 
-A GNOME Shell **50** extension for a soft, unified desktop, inspired by [Apple's material hierarchy](https://developer.apple.com/design/human-interface-guidelines/materials). Version **38** removes the obsolete feature/configuration layers while preserving the current appearance.
+A GNOME Shell **50** extension for a soft, unified desktop, inspired by [Apple's material hierarchy](https://developer.apple.com/design/human-interface-guidelines/materials). Version **41** reuses frost snapshots while dragging/resizing windows to avoid repeated capture/filter/allocation bursts, retaining coordinated translucent edges.
 
 ## Install
 
@@ -16,9 +16,11 @@ gnome-extensions enable prism@local
 gnome-extensions prefs prism@local
 ```
 
-Choose **Subtle, Balanced, Airy (default), Mist, Glass, Crystal**, or **Custom**. Custom reveals the full material-strength range. The other controls are enable, appearance, automatic power saving, and reduce transparency. No application selection or per-surface setup is required.
+Choose **Subtle, Balanced, Airy (default), Mist**, or **Custom**. Custom reveals the full material-strength range. Existing Glass and Crystal selections migrate to Custom at the same strength. The other controls are enable, appearance, automatic power saving, and reduce transparency. No application selection or per-surface setup is required.
 
 Windows, separate app popups, Shell menus, notifications, dock, overlays, overview, and lock screen use one coordinated material family. The top bar and short-lived overlays retain inexpensive tint; overview and lock backgrounds use native cached wallpaper blur. GTK4 menus receive a managed user-stylesheet block; existing user CSS is preserved. Restart GTK4 apps after styling updates.
+
+Dock and overview cards have a one-pixel translucent inset rim following native corners. App backdrops, Shell menus and GTK4 menus share subtle light/dark edge colors. These decorations add no blur passes, capture layers or timers. The dock rim preserves allocation and input geometry; disabling Prism restores its previous style. Native popup silhouettes and focus rings remain intact.
 
 Cached backdrops are snapshots, refreshing on focus, geometry, popup reopening, or the panel menu's **Refresh cached backgrounds** action. Whole-window translucency also fades app text and images. Embedded toolkit regions cannot universally be styled independently; native unknown layouts are left intact. Fullscreen and minimized windows are excluded.
 

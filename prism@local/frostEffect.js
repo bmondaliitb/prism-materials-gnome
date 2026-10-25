@@ -8,12 +8,14 @@ import {BlurBuffer} from './frostBlur.js';
 import {framebufferCapture} from './frostGeometry.js';
 
 let workspaceMotion = false;
+let interactiveMotion = false;
 
 // Capture the background BEFORE the actor is redirected offscreen. A mask wrapped
 // around Shell.BlurEffect alone can capture an empty offscreen buffer instead.
 export const FrostEffect = GObject.registerClass({GTypeName: 'PrismRoundedFrostEffect'},
 class FrostEffect extends Shell.GLSLEffect {
     static setWorkspaceMotion(active) { workspaceMotion = active; }
+    static setInteractiveMotion(active) { interactiveMotion = active; }
 
     _init() {
         super._init();
@@ -57,7 +59,8 @@ class FrostEffect extends Shell.GLSLEffect {
         // Capture separately from foreground redirection. Forcing ACTOR_DIRTY
         // used to redraw large, unchanged foreground textures on every frame.
         if (flags & Clutter.EffectPaintFlags.BYPASS_EFFECT) this._capture = null;
-        else if (!workspaceMotion && !this.get_actor().is_in_clone_paint?.())
+        else if (!workspaceMotion && !this.get_actor().is_in_clone_paint?.() &&
+            (!interactiveMotion || !this._capture))
             this._updateBackdrop(context);
         // Workspace/other clone paints reuse the already cached material.
         super.vfunc_paint(node, context, flags);

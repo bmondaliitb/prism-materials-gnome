@@ -5,10 +5,18 @@ import Shell from 'gi://Shell';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 import GdkPixbuf from 'gi://GdkPixbuf';
+import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
 import {BackdropRefreshEffect} from '../prism@local/backdropRefreshEffect.js';
 function check(type, names) {
     for (const name of names)
         if (typeof type.prototype[name] !== 'function') throw new Error(`${type.name}.${name} is not exposed to GJS`);
+}
+GObject.type_class_ref(Meta.Display);
+for (const name of ['grab-op-begin', 'grab-op-end']) {
+    const signal = GObject.signal_lookup(name, Meta.Display);
+    if (!signal || GObject.type_name(GObject.signal_query(signal).param_types[0]) !== 'MetaWindow')
+        throw new Error(`Missing native window-grab signal ${name}`);
 }
 check(Clutter.PaintContext, ['get_framebuffer']);
 check(Clutter.Actor, ['continue_pick', 'get_size', 'get_resource_scale', 'get_paint_opacity']);

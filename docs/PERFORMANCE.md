@@ -1,4 +1,4 @@
-# Cached rendering and power — version 38
+# Cached rendering and power — version 41
 
 Prism has one bounded cached blur pipeline. A backdrop is captured before its decorative actor is redirected offscreen, progressively reduced in 2× steps, filtered with two separable five-tap passes, and composited with one backdrop sample at native resolution. The reduced target budget is 65,536 pixels with at least 8× reduction; radius-aware reduction prevents sparse samples from leaving text bands. Early downsample targets can be larger than the final budget.
 
@@ -6,7 +6,7 @@ Each effect keeps at most four framebuffer-specific capture/filter records, acco
 
 ## Snapshot lifetime
 
-Unchanged paints reuse the snapshot. Focus changes, menu reopening, geometry/scale changes and explicit invalidation capture a fresh image. The panel menu provides Refresh cached backgrounds. Material density changes update blending uniforms/styles without adding filter passes. Moving/resizing can still recapture every frame; stationary video or scrolling behind a window does not update its frozen backdrop.
+Unchanged paints reuse the snapshot. Focus changes, menu reopening, geometry/scale changes and explicit invalidation capture a fresh image. The panel menu provides Refresh cached backgrounds. Material density changes update blending uniforms/styles without adding filter passes. During native mouse/keyboard window grabs, existing snapshots stay frozen, avoiding per-frame copies, filters and capture reallocations. Resizing stretches the existing soft backdrop until release; only the released window is explicitly invalidated. Newly appearing surfaces can still take their initial snapshot. Programmatic geometry changes outside a grab retain normal capture behavior. Stationary video or scrolling behind a window does not update its frozen backdrop.
 
 The obsolete live-refresh clock, shared trailing timer, rate limits and selectable quality kernels are removed. Cached frost has no refresh timer. Static wallpaper blur in overview/lock uses GNOME's native ACTOR-mode cache; the top bar and short-lived overlays use tint only.
 

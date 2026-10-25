@@ -57,6 +57,17 @@ export default class Prism extends Extension {
         });
         this._connect(this._interface, 'changed::color-scheme', () => { this._syncGtkMenus(); this._refresh(); });
         this._connect(global.display, 'notify::focus-window', () => this._refresh(false));
+        this._connect(global.display, 'grab-op-begin', () => FrostEffect.setInteractiveMotion(true));
+        this._connect(global.display, 'grab-op-end', (_display, window) => {
+            FrostEffect.setInteractiveMotion(false);
+            // Geometry notifications already update layout. Refresh only the
+            // released window's snapshot, rather than every desktop surface.
+            for (const state of this._windows.values()) {
+                if (state.window !== window) continue;
+                state.effect?.invalidateBackdrop();
+                state.popupEffect?.invalidateBackdrop();
+            }
+        });
         this._connect(global.window_manager, 'map', (_wm, actor) => this._watch(actor));
         this._connect(Main.overview, 'showing', () => this._refresh());
         this._connect(Main.overview, 'hidden', () => this._refresh());
@@ -295,6 +306,7 @@ export default class Prism extends Extension {
 
     disable() {
         FrostEffect.setWorkspaceMotion(false);
+        FrostEffect.setInteractiveMotion(false);
         this._experience?.destroy();
         this._experience = null;
         this._syncGtkMenus(true);

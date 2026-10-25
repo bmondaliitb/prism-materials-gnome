@@ -8,7 +8,7 @@
    <!-- macos is accepted only to migrate the legacy identifier to balanced. -->
    <choices><choice value="subtle"/><choice value="balanced"/><choice value="airy"/><choice value="mist"/><choice value="glass"/><choice value="crystal"/><choice value="custom"/><choice value="macos"/></choices>
    <summary>Coordinated desktop translucency</summary>
-   <description>Subtle, Balanced, Airy, Mist, Glass, and Crystal use the same cached rendering with different material densities. Airy is the default. Custom exposes the full strength range.</description>
+   <description>Subtle, Balanced, Airy, and Mist use the same cached rendering with different material densities. Airy is the default. Custom exposes the full strength range. Retired identifiers are accepted only for migration.</description>
   </key>
   <key name="auto-comfort" type="b"><default>true</default></key>
   <key name="appearance" type="s"><default>'auto'</default></key>

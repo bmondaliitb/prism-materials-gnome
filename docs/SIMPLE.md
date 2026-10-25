@@ -1,4 +1,4 @@
-# Presets and settings — version 38
+# Presets and settings — version 40
 
 All supported desktop surfaces share one Soft/cached material family. Preferences expose Soft materials, Appearance, Desktop translucency, Automatic power saving, and Reduce transparency. Custom reveals Material strength; Restore selects Airy without changing master enable or Reduce transparency.
 
@@ -10,8 +10,6 @@ All supported desktop surfaces share one Soft/cached material family. Preference
 | Balanced | 85% | 92% | 85% | 25% | 35% | 20% |
 | Airy (default) | 79% | 88% | 76% | 16% | 26% | 14% |
 | Mist | 72% | 84% | 65% | 5% | 15% | 7% |
-| Glass | 62% | 78% | 51% | 0% | 1% | 0% |
-| Crystal | 55% | 74% | 40% | 0% | 0% | 0% |
 
 Custom spans 0–100 strength: zero is most translucent, 50 reproduces Airy, and 100 gives 95% app opacity. Whole-window translucency affects app text/images too. Dialogs retain a stronger content-opacity floor; search/folder/password-card fills retain their role-specific density.
 
@@ -31,10 +29,10 @@ Opacity and detail-reduction values are calculated by `materialValues()` from st
 
 ## Upgrades
 
-Current preset and strength values are retained. Earlier preset names and Custom scales still migrate through the small upgrade helper; that is why the schema accepts one hidden legacy identifier. Version-38 migration only advances the marker for an existing current profile. Removed dconf entries may remain in the user database, but the schema and runtime no longer read or recreate them. They cannot override the current profile.
+Current preset and strength values are retained. Retired Glass and Crystal selections become Custom without changing their strength. Earlier preset names and Custom scales still migrate through the small upgrade helper; that is why the schema accepts hidden legacy identifiers. Version-38 migration only advances the marker for an existing current profile. Removed dconf entries may remain in the user database, but the schema and runtime no longer read or recreate them. They cannot override the current profile.
 
 The cleanup changes no system GDM configuration. The separate greeter companion remains supported. Existing manually configured native applications and user GTK CSS remain under their owners' control; Prism removes only its managed stylesheet block on disable.
 
 ## Validation
 
-The test suite requires the schema to contain exactly these seven keys, checks all six preset densities, Custom endpoints/monotonicity, legacy migration and saved accessibility choices, and audits runtime imports and removed settings. Real GLSL composition tests retain the preset contrast ordering and expanded popup fill range. Live visual/power verification remains blocked by desktop/session access in this workspace.
+The test suite requires the schema to contain exactly these seven keys, checks all four preset densities, Custom endpoints/monotonicity, legacy migration and saved accessibility choices, and audits runtime imports and removed settings. Real GLSL composition tests retain the preset contrast ordering and expanded popup fill range. Live visual/power verification remains blocked by desktop/session access in this workspace.

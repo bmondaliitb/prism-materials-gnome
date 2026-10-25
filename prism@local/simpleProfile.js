@@ -5,8 +5,6 @@ export const DESKTOP_PROFILES = Object.freeze({
     balanced: Object.freeze({label: 'Balanced', strength: 69}),
     airy: Object.freeze({label: 'Airy · default', strength: 50}),
     mist: Object.freeze({label: 'Mist · translucent', strength: 35}),
-    glass: Object.freeze({label: 'Glass · very translucent', strength: 15}),
-    crystal: Object.freeze({label: 'Crystal · most translucent', strength: 0}),
 });
 
 function profileForStrength(value) {
@@ -52,7 +50,9 @@ export function initializeProfile(settings) {
     else if (version < 4) {
         const oldProfile = settings.get_string('desktop-profile');
         if (version >= 3 && oldProfile !== 'custom') {
-            applyDesktopProfile(settings, oldProfile === 'macos' ? 'balanced' : oldProfile);
+            if (oldProfile === 'glass' || oldProfile === 'crystal')
+                applyStrength(settings, oldProfile === 'glass' ? 15 : 0);
+            else applyDesktopProfile(settings, oldProfile === 'macos' ? 'balanced' : oldProfile);
         } else {
             const old = settings.get_int('material-strength');
             const strength = Math.round(old <= 20 ? (old + 100) / 2.4 : 50 + (old - 20) / 1.6);
@@ -60,4 +60,8 @@ export function initializeProfile(settings) {
         }
         settings.set_int('simple-profile-version', 5);
     } else if (version < 5) settings.set_int('simple-profile-version', 5);
+    // Keep retired IDs readable for upgrades, but never expose them as choices.
+    const profile = settings.get_string('desktop-profile');
+    if (profile === 'glass' || profile === 'crystal')
+        settings.set_string('desktop-profile', 'custom');
 }

@@ -17,6 +17,7 @@ class Widget {
 class MockFrost {
     invalidateBackdrop(){this.invalidations=(this.invalidations??0)+1;}
     static setWorkspaceMotion(value){this.motion=value;}
+    static setInteractiveMotion(value){this.interactive=value;}
 }
 const types={NORMAL:0,MENU:1,DROPDOWN_MENU:2,POPUP_MENU:3,TOOLTIP:4,COMBO:5,DIALOG:6,MODAL_DIALOG:7,UTILITY:8,TOOLBAR:9,DESKTOP:10};
 let windowType=0,fullscreen=false,minimized=false;
@@ -134,7 +135,16 @@ const Boot=new Function('Extension','Gio','St','Main','global','RedrawGuard','Gt
     class extends Lifetime{setSuspended(){}},class{apply(css){if(css===null)gtkRemoved=true;}},
     {Button},{PopupSwitchMenuItem:Switch},class extends Lifetime{state={highContrast:false};},
     Surfaces,Overview,Lock,initializeProfile,comfortPolicy,materialValues,MockFrost,(dark,alpha)=>dark+':'+alpha);
-const boot=new Boot();boot.enable();boot.disable();
+const boot=new Boot();boot.enable();
+const grabbed={};let refreshed=0,unrelated=0;
+boot._windows.set({}, {window:grabbed,effect:{invalidateBackdrop(){refreshed++;}}});
+boot._windows.set({}, {window:{},effect:{invalidateBackdrop(){unrelated++;}}});
+for(const [, [name,callback]] of bootDisplay.handlers) if(name==='grab-op-begin')callback(bootDisplay,grabbed);
+assert(MockFrost.interactive,'Interactive grabs freeze cached backdrops');
+for(const [, [name,callback]] of bootDisplay.handlers) if(name==='grab-op-end')callback(bootDisplay,grabbed);
+assert(!MockFrost.interactive&&refreshed===1&&unrelated===0,'Release refreshes only the grabbed window');
+boot._windows.clear();boot.disable();
+assert(!MockFrost.interactive,'Disable clears the interactive freeze');
 assert(buttonDestroyed&&gtkRemoved&&[stage,wm,bootDisplay,overview,session,iface].every(item=>item.handlers.size===0),
     'A complete enable/disable releases signal wiring, status button and GTK material');
 print('Extension enable/disable and surface constructor wiring checks passed');

@@ -5,9 +5,9 @@ export const SOFT_TINT = 0.28;
 // light foregrounds even when application appearance is light.
 const PALETTES = Object.freeze({
     dark: Object.freeze({background: '25,28,35', foreground: '242,242,242',
-        edge: '255,255,255,0.14', highlight: '255,255,255'}),
+        edge: '255,255,255,0.22', highlight: '255,255,255'}),
     light: Object.freeze({background: '240,244,252', foreground: '28,30,40',
-        edge: '20,25,35,0.14', highlight: '28,30,40'}),
+        edge: '20,25,35,0.18', highlight: '28,30,40'}),
 });
 export const MATERIAL_STATES = Object.freeze({hover: 0.12, focus: 0.16, pressed: 0.22, disabled: 0.4});
 export function surfacePalette(dark) { return PALETTES[dark ? 'dark' : 'light']; }
@@ -16,8 +16,8 @@ export function materialStyle(dark, {focused = true, emphasis = false} = {}) {
     const inactive = emphasis && !focused;
     const tint = SOFT_TINT + (inactive ? 0.08 : 0);
     const color = surfacePalette(dark).background;
-    const edge = inactive ? 0.06 : dark ? 0.26 : 0.55;
-    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(255,255,255,${edge});`;
+    const edge = inactive ? '255,255,255,0.12' : surfacePalette(dark).edge;
+    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(${edge});`;
 }
 
 export function eligible({normal, fullscreen, minimized}) {

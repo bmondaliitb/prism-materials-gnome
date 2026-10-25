@@ -55,6 +55,9 @@ assert(calendar.style.includes('transparent')&&card.style.includes('transparent'
     looseCalendar.style==='border-radius: 8px;','Calendar inset clearing stays scoped');
 assert(message.style.includes('transparent')&&banner.effects.length===1,'Notifications share a single backdrop');
 assert(menu.style.includes('border-color: rgba(')&&!menu.style.includes('border: 1px'),'Native border geometry is preserved');
+assert(dock.style.includes('box-shadow: inset 0 0 0 1px rgba(')&&
+    !dock.style.includes('border-width:')&&!dock.style.includes('border-radius: 12px'),
+    'Dock rim is visible without a native border and preserves theme geometry');
 assert(clock.style.includes('color: rgb(')&&icon.style.includes('color: rgb(')&&
     button.style==='border-radius: 8px;'&&dot.style==='border-radius: 8px;'&&layout.style==='border-radius: 8px;',
     'Panel leaf foregrounds are readable without touching workspace geometry');
