@@ -1,5 +1,4 @@
 import GLib from 'gi://GLib';
-import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {FrostEffect} from './frostEffect.js';
 import {shellSurfaceKind, shellSurfaceRole, surfacePalette} from './materials.js';
@@ -7,10 +6,9 @@ import {surfaceOpacity, panelIsDark} from './experience.js';
 
 // Event-driven discovery also covers menus/docks created after Prism is enabled.
 export class ShellSurfaces {
-    constructor(root, panel, settings, isDark, permitted, redrawGuard = null, context = () => ({})) {
+    constructor(root, panel, isDark, permitted, redrawGuard, context) {
         this._context = context;
         this._redrawGuard = redrawGuard;
-        this._settings = settings;
         this._panel = panel;
         this._isDark = isDark;
         this._permitted = permitted;
@@ -40,7 +38,7 @@ export class ShellSurfaces {
         ids.push(actor.connect('destroy', () => this._forget(actor)));
         ids.push(actor.connect('notify::mapped', () => {
             const effect = this._applied.get(actor)?.effect;
-            if (effect?.freezeBackdrop && actor.is_mapped?.()) effect.invalidateBackdrop();
+            if (effect && actor.is_mapped?.()) effect.invalidateBackdrop();
         }));
         // Non-St actors have no theme/style properties.
         if (typeof actor.get_style_class_name === 'function') {
@@ -170,9 +168,13 @@ export class ShellSurfaces {
         if (Boolean(this._motionPaused) === paused) return;
         this._motionPaused = paused;
         for (const [actor, saved] of this._applied) {
-            if (saved.type === 'native-panel') saved.effect.set_enabled(!paused);
             this._redrawGuard?.track(actor, Boolean(saved.effect) && !paused);
         }
+    }
+
+    refreshBackdrops() {
+        for (const saved of this._applied.values())
+            if (saved.effect) saved.effect.invalidateBackdrop();
     }
 
     refresh() {
@@ -181,16 +183,15 @@ export class ShellSurfaces {
         const context = this._context();
         const palette = surfacePalette(dark);
         const tint = palette.background;
-        const alpha = Math.max(40, Math.min(100, this._settings.get_int('shell-opacity'))) / 100;
-        const panelAlpha = Math.max(0, Math.min(100, this._settings.get_int('panel-opacity'))) / 100;
+        const alpha = Math.max(40, Math.min(100, context.shellOpacity)) / 100;
+        const panelAlpha = Math.max(0, Math.min(100, context.panelOpacity)) / 100;
         const panelTint = dark ? '32,34,38' : '218,222,228';
-        const panelDark = this._settings.get_boolean('wallpaper-panel')
-            ? panelIsDark(dark, panelAlpha, context.luminance) : dark;
+        const panelDark = panelIsDark(dark, panelAlpha, context.luminance);
         const panelForeground = panelDark ? '246,247,249' : '16,20,26';
         for (const actor of this._watched.keys()) {
             if (typeof actor.get_style !== 'function') continue;
             const {kind, role} = this._describe(actor);
-            if (!active || !kind || !this._settings.get_boolean(`shell-${kind}`)) {
+            if (!active || !kind) {
                 this._restore(actor);
                 continue;
             }
@@ -205,42 +206,23 @@ export class ShellSurfaces {
             this._syncClass(actor, saved, role === 'surface' && kind !== 'panel'
                 ? `prism-material-${kind === 'overlays' || dark ? 'dark' : 'light'}` : null);
             const radii = role === 'surface' ? this._radii(actor, kind) : null;
-            const safe = this._settings.get_boolean('preserve-corners');
-            const rounded = radii?.some(radius => radius > 0);
-            const quality = context.quality ?? this._settings.get_string('render-quality') ?? 'eco';
-            // Short-lived switchers, OSDs and tooltips use native rounded tint
-            // only. Never capture/filter the desktop for these overlays.
-            const type = role !== 'surface' || kind === 'overlays' || quality === 'off' ||
-                (context.cachedBackdrop && kind === 'panel') ||
-                (context.powerSaver && (kind === 'panel' || kind === 'dock')) ? null
-                : kind === 'panel' ? (this._settings.get_boolean('panel-blur') && (!safe || (radii && !rounded)) ? 'native-panel' : null)
-                : (safe && rounded && this._settings.get_boolean('rounded-frost')) ? 'frost'
-                : (!safe || (radii && !rounded)) ? 'frost' : null;
+            // The top bar and short-lived overlays are tint-only. Unknown
+            // native shapes also keep tint rather than risk rectangular edges.
+            const type = role === 'surface' && kind !== 'panel' && kind !== 'overlays' && radii &&
+                !(context.powerSaver && kind === 'dock') ? 'frost' : null;
             if (saved.type !== type) {
                 if (saved.effect) actor.remove_effect(saved.effect);
-                saved.effect = type === 'frost' ? new FrostEffect()
-                    : type === 'native-panel' ? new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND}) : null;
+                saved.effect = type ? new FrostEffect() : null;
                 saved.type = type;
                 saved.paintKey = null;
                 if (saved.effect) actor.add_effect(saved.effect);
-                if (type === 'native-panel' && this._motionPaused) saved.effect.set_enabled(false);
-            }
-            if (type === 'frost') {
-                saved.effect.radii = safe ? radii : [0, 0, 0, 0];
-                saved.effect.quality = quality;
-                saved.effect.freezeBackdrop = context.cachedBackdrop;
-                saved.effect.maxFps = context.backdropFps ?? this._settings.get_int('backdrop-fps') ?? 30;
-                saved.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
-                    Math.max(0, Math.min(80, this._settings.get_int('background-detail') ?? 25)) / 100];
             }
             if (saved.effect) {
-                const limit = type === 'native-panel' ? (quality === 'eco' ? 18 : quality === 'balanced' ? 32 : 80) : 80;
-                saved.effect.radius = Math.max(0, Math.min(limit, this._settings.get_int('blur-radius')));
-                saved.effect.brightness = kind === 'panel' ? 1 : (dark ? 0.85 : 1);
-                const paintKey = JSON.stringify([saved.effect.radius, saved.effect.brightness,
-                    saved.effect.radii, saved.effect.veil, quality, saved.effect.maxFps, context.cachedBackdrop]);
-                // A hover/theme notification may reach refresh without changing
-                // the material. It must not invalidate every other backdrop.
+                saved.effect.radii = radii;
+                saved.effect.radius = 36;
+                saved.effect.brightness = dark ? 0.85 : 1;
+                saved.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]), context.detail / 100];
+                const paintKey = JSON.stringify([radii, saved.effect.brightness, saved.effect.veil]);
                 if (saved.paintKey !== paintKey) {
                     saved.paintKey = paintKey;
                     actor.queue_redraw?.();
@@ -249,7 +231,7 @@ export class ShellSurfaces {
             this._redrawGuard?.track(actor, Boolean(saved.effect) && !this._motionPaused);
             // Theme !important rules (notably Yaru #panel) otherwise keep opaque paint.
             // BoxPointer paints its own Cairo background beneath popup-menu-content.
-            const materialAlpha = surfaceOpacity(kind, alpha, this._settings.get_boolean('material-hierarchy'));
+            const materialAlpha = surfaceOpacity(kind, alpha);
             const background = role === 'surface'
                 ? (kind === 'panel' ? `rgba(${panelTint},${panelAlpha})`
                     : `rgba(${kind === 'overlays' ? surfacePalette(true).background : tint},${materialAlpha})`) : 'transparent';
@@ -263,11 +245,9 @@ export class ShellSurfaces {
                     ? `color: rgb(${surfacePalette(kind === 'overlays' || dark).foreground}) !important;` : '';
             const fill = role === 'foreground' ? ''
                 : `background-image: none !important; background-color: ${background} !important; ${pointer}`;
-            const edge = role === 'surface' && kind !== 'panel' && this._settings.get_boolean('glass-edges')
-                && kind !== 'overlays'
+            const edge = role === 'surface' && kind !== 'panel' && kind !== 'overlays'
                 ? `border-color: rgba(${palette.edge});` : '';
-            const transition = role === 'surface' && kind !== 'overlays' ? `transition-duration: ${this._settings.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower ? 140 : 0}ms;` : '';
-            saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge} ${transition}`;
+            saved.appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} ${fill} ${foreground} ${edge}`;
             if (actor.get_style() !== saved.appliedStyle) {
                 this._settingStyle = true;
                 try { actor.set_style(saved.appliedStyle); }
@@ -281,7 +261,6 @@ export class ShellSurfaces {
         this._destroying = true;
         if (this._source) GLib.source_remove(this._source);
         for (const actor of [...this._watched.keys()]) this._forget(actor);
-        this._settings = null;
         this._panel = null;
         this._isDark = null;
         this._permitted = null;

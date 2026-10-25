@@ -2,7 +2,7 @@ UUID = prism@local
 .PHONY: check package
 check:
 	glib-compile-schemas --strict --dry-run $(UUID)/schemas
-	gjs tools/check-syntax.js $(UUID)/extension.js $(UUID)/prefs.js $(UUID)/materials.js $(UUID)/shellSurfaces.js $(UUID)/gtkMenus.js $(UUID)/frostEffect.js $(UUID)/frostShader.js $(UUID)/backdrop.js $(UUID)/backdropRefreshEffect.js $(UUID)/windowSurface.js $(UUID)/frostGeometry.js $(UUID)/frostBlur.js $(UUID)/renderQuality.js
+	gjs tools/check-syntax.js $(UUID)/extension.js $(UUID)/prefs.js $(UUID)/materials.js $(UUID)/shellSurfaces.js $(UUID)/gtkMenus.js $(UUID)/frostEffect.js $(UUID)/frostShader.js $(UUID)/backdrop.js $(UUID)/backdropRefreshEffect.js $(UUID)/windowSurface.js $(UUID)/frostGeometry.js $(UUID)/frostBlur.js
 	gjs -m tests/materials.js
 	gjs -m tests/lifecycle.js
 	gjs -m tests/shell-surfaces.js
@@ -14,38 +14,27 @@ check:
 	gjs tools/check-syntax.js $(UUID)/experience.js
 	gjs tools/check-syntax.js $(UUID)/overviewMaterial.js
 	gjs tools/check-syntax.js $(UUID)/lockMaterial.js
+	gjs tools/check-syntax.js $(UUID)/simpleProfile.js
 	gjs tools/check-syntax.js integration/login/extension.js
 	gjs -m tests/experience.js
 	gjs -m tests/overview.js
 	gjs -m tests/lock.js
+	gjs -m tests/simple-profile.js
 	/usr/bin/python3 -B tests/login-installer.py
 	/usr/bin/python3 tests/gtk-menu-css.py
+	/usr/bin/python3 tests/cleanup.py
 package: check
 	glib-compile-schemas --strict $(UUID)/schemas
 	mkdir -p dist
-	cd $(UUID) && zip -qr ../dist/$(UUID).shell-extension.zip metadata.json stylesheet.css extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js renderQuality.js experience.js overviewMaterial.js lockMaterial.js schemas
-
-.PHONY: adapter
-adapter:
-	$(CC) -shared -fPIC -O2 -Wall -Wextra -Werror -o integration/libprism-gtk.so integration/prism-gtk.c -ldl
-
-.PHONY: check-adapter
-check-adapter: adapter
-	/usr/bin/python3 tests/css.py
-	mkdir -p /tmp/prism-adapter-test
-	$(CC) -shared -fPIC -Wall -Wextra -Werror -o /tmp/prism-adapter-test/libgtk-mock.so tests/fixtures/gtk-mock.c
-	$(CC) -o /tmp/prism-adapter-test/check tests/fixtures/gtk-mock-main.c -L/tmp/prism-adapter-test -lgtk-mock -Wl,-rpath,/tmp/prism-adapter-test
-	PRISM_GTK_CSS=$(CURDIR)/integration/sidebar.css LD_PRELOAD=$(CURDIR)/integration/libprism-gtk.so /tmp/prism-adapter-test/check
-	TEST_NAVIGATION=1 PRISM_GTK_CSS=$(CURDIR)/integration/sidebar.css LD_PRELOAD=$(CURDIR)/integration/libprism-gtk.so /tmp/prism-adapter-test/check
-	TEST_UNKNOWN=1 PRISM_GTK_CSS=$(CURDIR)/integration/sidebar.css LD_PRELOAD=$(CURDIR)/integration/libprism-gtk.so /tmp/prism-adapter-test/check
-	TEST_MISSING_CONTENT=1 PRISM_GTK_CSS=$(CURDIR)/integration/sidebar.css LD_PRELOAD=$(CURDIR)/integration/libprism-gtk.so /tmp/prism-adapter-test/check
+	/usr/bin/python3 -c "from pathlib import Path; Path('dist/.prism-package.zip').unlink(missing_ok=True)"
+	cd $(UUID) && zip -qr ../dist/.prism-package.zip metadata.json stylesheet.css extension.js prefs.js materials.js shellSurfaces.js gtkMenus.js frostEffect.js frostShader.js backdrop.js backdropRefreshEffect.js redrawGuard.js windowSurface.js frostGeometry.js frostBlur.js experience.js overviewMaterial.js lockMaterial.js simpleProfile.js schemas
+	mv dist/.prism-package.zip dist/$(UUID).shell-extension.zip
 
 .PHONY: check-frost-gpu
 check-frost-gpu:
 	gjs -m tests/frost.js
-	python3 tests/frost-gpu.py eco
-	python3 tests/frost-gpu.py balanced
-	python3 tests/frost-gpu.py high
+	gjs -m tests/simple-profile.js
+	python3 tests/frost-gpu.py
 
 .PHONY: check-runtime-api
 check-runtime-api:

@@ -2,21 +2,12 @@ import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 
 // Small, pure policies are shared by Shell, app backdrops, and tests.
-export function comfortPolicy(state, automatic, quality, savedFps) {
-    const onBattery = Boolean(automatic && state.onBattery);
-    const powerSaver = Boolean(automatic && state.powerSaver);
-    const lowPower = onBattery || powerSaver;
-    const fps = Math.max(0, Math.min(60, savedFps ?? 30));
-    const cap = powerSaver ? 12 : onBattery ? 20 : 0;
-    return {...state, onBattery, powerSaver, lowPower,
-        cachedBackdrop: quality === 'cached',
-        quality: quality === 'cached' || (lowPower && quality !== 'off') ? 'eco' : quality,
-        backdropFps: cap ? Math.min(fps || cap, cap) : fps,
-        blurFocusedOnly: powerSaver};
+export function comfortPolicy(state, automatic) {
+    return {...state, powerSaver: Boolean(automatic && state.powerSaver),
+        blurFocusedOnly: Boolean(automatic && state.powerSaver)};
 }
 
-export function surfaceOpacity(kind, alpha, hierarchy) {
-    if (!hierarchy) return alpha;
+export function surfaceOpacity(kind, alpha) {
     const offset = {dialogs: 0.08, notifications: 0.05, dock: -0.1}[kind] ?? 0;
     return Math.round(Math.max(0.4, Math.min(1, alpha + offset)) * 1000) / 1000;
 }
@@ -52,8 +43,7 @@ export function wallpaperLuminance(pixbuf) {
 
 export class Experience {
     constructor(settings, interfaceSettings, changed) {
-        this.state = {highContrast: false, onBattery: false, powerSaver: false,
-            lowPower: false, animations: true, luminance: null};
+        this.state = {highContrast: false, powerSaver: false, luminance: null};
         this._settings = settings;
         this._interface = interfaceSettings;
         this._changed = changed;
@@ -63,13 +53,9 @@ export class Experience {
         this._background = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
         this._a11y = new Gio.Settings({schema_id: 'org.gnome.desktop.a11y.interface'});
         this._listen(this._a11y, 'changed::high-contrast', () => this._sync());
-        this._listen(this._interface, 'changed::enable-animations', () => this._sync());
         this._listen(this._interface, 'changed::color-scheme', () => this._wallpaper());
         this._listen(settings, 'changed::appearance', () => this._wallpaper());
-        this._listen(settings, 'changed::wallpaper-panel', () => this._wallpaper());
         this._listen(this._background, 'changed', () => this._wallpaper());
-        this._proxy('org.freedesktop.UPower', '/org/freedesktop/UPower',
-            'org.freedesktop.UPower', proxy => { this._battery = proxy; });
         this._proxy('org.freedesktop.UPower.PowerProfiles', '/org/freedesktop/UPower/PowerProfiles',
             'org.freedesktop.UPower.PowerProfiles', proxy => { this._power = proxy; });
         this._sync();
@@ -95,10 +81,7 @@ export class Experience {
 
     _sync() {
         this.state.highContrast = this._a11y.get_boolean('high-contrast');
-        this.state.animations = this._interface.get_boolean('enable-animations');
-        this.state.onBattery = Boolean(this._battery?.get_cached_property('OnBattery')?.deep_unpack());
         this.state.powerSaver = this._power?.get_cached_property('ActiveProfile')?.deep_unpack() === 'power-saver';
-        this.state.lowPower = this.state.onBattery || this.state.powerSaver;
         this._changed?.();
     }
 
@@ -108,7 +91,6 @@ export class Experience {
         this._wallpaperCancel = cancel;
         this.state.luminance = null;
         this._changed?.();
-        if (!this._settings.get_boolean('wallpaper-panel')) return;
         if (this._background.get_string('picture-options') === 'none') {
             this.state.luminance = solidLuminance(this._background.get_string('primary-color'));
             this._changed?.();
@@ -143,6 +125,6 @@ export class Experience {
         this._wallpaperCancel?.cancel();
         for (const [object, id] of this._signals) object.disconnect(id);
         this._signals = [];
-        this._battery = this._power = null;
+        this._power = null;
     }
 }

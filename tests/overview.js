@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import {materialValues} from '../prism@local/simpleProfile.js';
 const [, bytes] = GLib.file_get_contents('prism@local/overviewMaterial.js');
 const source = new TextDecoder().decode(bytes).replace(/^import .*;\n/gm, '').replace('export class', 'class');
 function assert(value, message) { if (!value) throw new Error(message); }
@@ -43,10 +44,9 @@ const root = new Actor({visible: false, reactive: true});
 root.set_style('background-color: #222222;');
 const controls = new Actor({opacity: 255}); root.add_child(controls);
 const layout = new Actor({overviewGroup: root, monitors: [{index: 0}, {index: 1}]});
-const values = {'overview-material': true, 'overview-blur': true, 'overview-opacity': 35, 'blur-radius': 36, 'render-quality': 'eco'};
-const settings = {get_boolean: key => values[key], get_int: key => values[key], get_string: key => values[key]};
+let context = materialValues(50);
 let permitted = true;
-const material = new Material(layout, settings, () => permitted, () => ({quality: values['render-quality']}));
+const material = new Material(layout, () => permitted, () => context);
 assert(created === 0, 'Hidden overview does not eagerly allocate background actors');
 assert(!root.has_style_class_name('prism-overview-material'), 'Hidden initial overview does not activate search styling');
 root.visible = true; root.emit('notify::visible');
@@ -54,20 +54,17 @@ assert(created === 2 && root.children[1] === controls && controls.opacity === 25
 assert(root.has_style_class_name('prism-overview-material'), 'Material scope covers search providers including dynamically added results');
 assert(material._layer.reactive === false && material._layer.can_focus === false && material._layer.track_hover === false,
     'Decorative overview layer cannot accept interaction');
-assert(root.style.includes('background-color: transparent !important') && material._tint.style.includes('0.35'),
+assert(root.style.includes('background-color: transparent !important') && material._tint.style.includes('0.26'),
     'Opaque overview fill is replaced with an independently adjustable veil');
 for (const record of material._records.values()) assert(record.effect.mode === 0 && record.effect.radius === 18,
     'Overview uses cached actor blur, not live backdrop capture, with the Eco radius cap');
 root.visible = false; root.emit('notify::visible');
 root.visible = true; root.emit('notify::visible');
 assert(created === 2, 'Overview hide/show reuses wallpaper managers');
-values['overview-blur'] = false; material.refresh();
-assert([...material._records.values()].every(record => !record.effect), 'Overview blur can be disabled without losing translucency');
-values['overview-opacity'] = 10; material.refresh();
+context = {...context, overviewOpacity: 10}; material.refresh();
 assert(material._tint.style.includes('0.1') && controls.style === null && controls.opacity === 255,
     'Changing veil opacity leaves search/app controls unchanged');
-values['overview-blur'] = true; values['render-quality'] = 'off'; material.refresh();
-assert([...material._records.values()].every(record => !record.effect), 'Translucency-only mode suppresses overview blur');
+assert([...material._records.values()].every(record => record.effect), 'Density changes reuse wallpaper blur');
 layout.emit('monitors-changed');
 assert(created === 4 && destroyed === 2, 'Monitor changes rebuild owned wallpaper resources');
 permitted = false; material.refresh();
@@ -79,7 +76,7 @@ assert(root.signals.size === 0 && layout.signals.size === 0 && destroyed === 4, 
 const root2 = new Actor({visible: true});
 root2.add_style_class_name('prism-overview-material');
 const layout2 = new Actor({overviewGroup: root2, monitors: []});
-const material2 = new Material(layout2, settings, () => true, () => ({}));
+const material2 = new Material(layout2, () => true, () => context);
 material2.destroy();
 assert(root2.has_style_class_name('prism-overview-material'), 'Cleanup preserves a preexisting external scope class');
 print('Overview material layering, cached blur, monitor lifecycle, opacity, and restoration checks passed');

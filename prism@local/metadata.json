@@ -1,11 +1,11 @@
 {
   "uuid": "prism@local",
   "name": "Prism Materials",
-  "description": "Soft, layered window materials with per-application control.",
+  "description": "Soft, cached materials across windows and desktop surfaces.",
   "shell-version": [
     "50"
   ],
   "settings-schema": "org.gnome.shell.extensions.prism",
   "session-modes": ["user", "unlock-dialog"],
-  "version": 33
+  "version": 38
 }

@@ -7,10 +7,9 @@ import {VisualBackdrop} from './backdrop.js';
 // not live screen capture, and blur only that actor so controls stay sharp and
 // static wallpaper blur can be cached by the native ACTOR-mode effect.
 export class OverviewMaterial {
-    constructor(layout, settings, permitted, context) {
+    constructor(layout, permitted, context) {
         this._layout = layout;
         this._root = layout.overviewGroup;
-        this._settings = settings;
         this._permitted = permitted;
         this._context = context;
         this._managers = [];
@@ -24,7 +23,7 @@ export class OverviewMaterial {
     }
 
     refresh() {
-        if (!this._permitted() || !this._settings.get_boolean('overview-material')) {
+        if (!this._permitted()) {
             this._clear();
             return;
         }
@@ -57,7 +56,7 @@ export class OverviewMaterial {
         }
         // GNOME's overview labels use a light foreground even in light mode.
         // Keep a dark neutral veil rather than restyling every app/search label.
-        const opacity = Math.max(0, Math.min(100, this._settings.get_int('overview-opacity'))) / 100;
+        const opacity = Math.max(0, Math.min(100, this._context().overviewOpacity)) / 100;
         const tint = `background-color: rgba(20,23,30,${opacity});`;
         if (this._tint.get_style() !== tint) this._tint.set_style(tint);
         for (const manager of this._managers) this._background(manager.backgroundActor);
@@ -72,18 +71,12 @@ export class OverviewMaterial {
         }
         actor.reactive = false;
         actor.content.brightness = 0.65;
-        const quality = this._context().quality ?? this._settings.get_string('render-quality');
-        const radius = Math.max(0, Math.min(quality === 'eco' ? 18 : quality === 'balanced' ? 32 : 56,
-            this._settings.get_int('blur-radius')));
-        const blur = this._settings.get_boolean('overview-blur') && quality !== 'off' && radius > 0;
-        if (blur && !record.effect) {
+        if (!record.effect) {
             record.effect = new Shell.BlurEffect({mode: Shell.BlurMode.ACTOR});
             actor.add_effect(record.effect);
-        } else if (!blur && record.effect) {
-            actor.remove_effect(record.effect);
-            record.effect = null;
         }
-        if (record.effect) { record.effect.radius = radius; record.effect.brightness = 1; }
+        record.effect.radius = 18;
+        record.effect.brightness = 1;
     }
 
     _clear() {

@@ -4,11 +4,11 @@ These are separate Shell sessions. Prism runs in the user's normal and `unlock-d
 
 ## Lock screen: Super+L
 
-Install the normal extension package and log out/in once. **Lock screen material** defaults on. The clock page shows the native desktop wallpaper with blur radius zero and brightness one. GNOME's background manager continues handling wallpaper changes, dark/light wallpaper selection, and monitors, using the same source as the desktop. No desktop windows are captured or revealed.
+Install the normal extension package and log out/in once. The unified materials include the lock screen. The clock page shows the native desktop wallpaper with blur radius zero and brightness one. GNOME's background manager continues handling wallpaper changes, dark/light wallpaper selection, and monitors, using the same source as the desktop. No desktop windows are captured or revealed.
 
-When the native password panel appears, its backing becomes a dark 70% translucent rounded card. Text, fields, gestures, verification, keyboard focus, and native opacity animations remain controlled by GNOME. The existing wallpaper blur is reused, capped at 18 logical px in Eco, 32 in Balanced, and 56 in High, multiplied by the native resource scale. Translucency only uses zero blur. There is no added effect, blur animation, per-frame update, or repeating timer.
+When the native password panel appears, its backing becomes a dark 70% translucent rounded card. Text, fields, gestures, verification, keyboard focus, and native opacity animations remain controlled by GNOME. The existing wallpaper blur is reused at 18 logical px, multiplied by the native resource scale. The removed quality ladder is no longer consulted. There is no added effect, blur animation, per-frame update, or repeating timer.
 
-The feature follows global enable, Reduce transparency, and automatic high-contrast handling. Turning it off restores native wallpaper filtering and owned panel styles. Later external inline styles are preserved. Monitor/scale updates and recreated lock dialogs are handled through native signals. Prism's desktop indicator is hidden while locked; desktop window and overview materials remain suspended.
+The feature follows global enable, Reduce transparency, and automatic high-contrast handling. Suspending materials restores native wallpaper filtering and owned panel styles. Later external inline styles are preserved. Monitor/scale updates and recreated lock dialogs are handled through native signals. Prism's desktop indicator is hidden while locked; desktop window and overview materials remain suspended.
 
 ## Boot/logout login: Ubuntu GDM
 

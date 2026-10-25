@@ -1,7 +1,6 @@
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
-import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -19,25 +18,32 @@ import {ShellSurfaces} from './shellSurfaces.js';
 import {Experience, comfortPolicy} from './experience.js';
 import {OverviewMaterial} from './overviewMaterial.js';
 import {LockMaterial} from './lockMaterial.js';
+import {initializeProfile, materialValues} from './simpleProfile.js';
 
 export default class Prism extends Extension {
     enable() {
         this._settings = this.getSettings();
+        initializeProfile(this._settings);
         this._interface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         this._connections = [];
         this._windows = new Map();
         this._workspaceMotion = false;
         this._redrawGuard = new RedrawGuard(() => global.stage.queue_redraw());
-        this._redrawGuard.setEnabled(this._settings.get_boolean('stable-redraws'));
-        this._tracker = Shell.WindowTracker.get_default();
         this._gtkMenus = new GtkMenuStyle();
         this._gtkCss = undefined;
         this._button = new PanelMenu.Button(0.0, 'Prism Materials');
         this._button.add_child(new St.Icon({icon_name: 'weather-fog-symbolic', style_class: 'system-status-icon'}));
-        this._toggle = new PopupMenu.PopupSwitchMenuItem('Window materials', this._settings.get_boolean('enabled'));
+        this._toggle = new PopupMenu.PopupSwitchMenuItem('Soft materials', this._settings.get_boolean('enabled'));
         this._toggle.connect('toggled', (_item, state) => this._settings.set_boolean('enabled', state));
         this._button.menu.addMenuItem(this._toggle);
-        this._button.menu.addAction('Toggle for focused app', () => this._toggleApp());
+        this._button.menu.addAction('Refresh cached backgrounds', () => {
+            for (const state of this._windows.values()) {
+                state.effect?.invalidateBackdrop?.();
+                state.popupEffect?.invalidateBackdrop?.();
+            }
+            this._shellSurfaces?.refreshBackdrops();
+            global.stage.queue_redraw();
+        });
         this._button.menu.addAction('Material settings', async () => {
             if (Main.sessionMode.isLocked) return;
             try { await this.openPreferences(); }
@@ -62,16 +68,15 @@ export default class Prism extends Extension {
             this._syncGtkMenus();
             this._refresh();
         });
-        this._shellSurfaces = new ShellSurfaces(Main.uiGroup, Main.panel, this._settings,
+        this._shellSurfaces = new ShellSurfaces(Main.uiGroup, Main.panel,
             () => this._dark(), () => this._settings.get_boolean('enabled') &&
                 !this._reduced() && !Main.sessionMode.isLocked,
             this._redrawGuard, () => this._context());
-        this._overviewMaterial = new OverviewMaterial(Main.layoutManager, this._settings,
+        this._overviewMaterial = new OverviewMaterial(Main.layoutManager,
             () => this._settings.get_boolean('enabled') && !this._reduced() && !Main.sessionMode.isLocked,
             () => this._context());
-        this._lockMaterial = new LockMaterial(Main.screenShield, this._settings,
-            () => this._settings.get_boolean('enabled') && !this._reduced() && Main.sessionMode.isLocked,
-            () => this._context());
+        this._lockMaterial = new LockMaterial(Main.screenShield,
+            () => this._settings.get_boolean('enabled') && !this._reduced() && Main.sessionMode.isLocked);
         this._button.visible = !Main.sessionMode.isLocked;
         for (const actor of global.get_window_actors())
             this._watch(actor);
@@ -80,14 +85,6 @@ export default class Prism extends Extension {
 
     _connect(object, signal, handler) {
         this._connections.push([object, object.connect(signal, handler)]);
-    }
-
-    _toggleApp() {
-        const window = global.display.focus_window;
-        const id = window && this._tracker.get_window_app(window)?.get_id();
-        if (!id) return;
-        const apps = this._settings.get_strv('applications');
-        this._settings.set_strv('applications', apps.includes(id) ? apps.filter(app => app !== id) : [...apps, id]);
     }
 
     _watch(actor) {
@@ -115,8 +112,8 @@ export default class Prism extends Extension {
     _context() {
         const state = this._experience?.state ?? {};
         const automatic = this._settings.get_boolean('auto-comfort');
-        const quality = this._settings.get_string('render-quality') ?? 'eco';
-        return comfortPolicy(state, automatic, quality, this._settings.get_int('backdrop-fps'));
+        return {...comfortPolicy(state, automatic),
+            ...materialValues(this._settings.get_int('material-strength'))};
     }
 
     _reduced() {
@@ -126,9 +123,8 @@ export default class Prism extends Extension {
 
     _syncGtkMenus(disabling = false) {
         try {
-            const active = !disabling && this._settings.get_boolean('gtk-menus') &&
-                this._settings.get_boolean('enabled') && !this._reduced();
-            const css = active ? gtkMenuCss(this._dark(), this._settings.get_int('shell-opacity')) : null;
+            const active = !disabling && this._settings.get_boolean('enabled') && !this._reduced();
+            const css = active ? gtkMenuCss(this._dark(), this._context().shellOpacity) : null;
             if (!disabling && this._gtkCss === css) return;
             this._gtkMenus?.apply(css);
             this._gtkCss = css;
@@ -143,7 +139,6 @@ export default class Prism extends Extension {
             if (Main.sessionMode.isLocked) this._button.menu.close();
         }
         this._syncWorkspaceMotion();
-        this._redrawGuard?.setEnabled(this._settings.get_boolean('stable-redraws'));
         if (shell) this._shellSurfaces?.refresh();
         this._overviewMaterial?.refresh();
         this._lockMaterial?.refresh();
@@ -153,8 +148,7 @@ export default class Prism extends Extension {
     _syncWorkspaceMotion() {
         // GNOME 50 uses this controller for keyboard switches and touchpad
         // gestures, including cancellation. Observe it without wrapping methods.
-        const active = Boolean(this._settings.get_boolean('smooth-workspaces') &&
-            Main.wm?._workspaceAnimation?._switchData);
+        const active = Boolean(Main.wm?._workspaceAnimation?._switchData);
         if (Boolean(this._workspaceMotion) === active) return false;
         this._workspaceMotion = active;
         FrostEffect.setWorkspaceMotion(active);
@@ -170,27 +164,18 @@ export default class Prism extends Extension {
         if (this._workspaceMotion && this._settings.get_boolean('enabled') && !this._reduced()) return;
         const s = this._settings;
         const w = state.window;
-        const app = this._tracker.get_window_app(w)?.get_id();
         const type = w.get_window_type();
         const isPopup = [Meta.WindowType.MENU, Meta.WindowType.DROPDOWN_MENU, Meta.WindowType.POPUP_MENU,
             Meta.WindowType.TOOLTIP, Meta.WindowType.COMBO].includes(type);
         const isDialog = [Meta.WindowType.DIALOG, Meta.WindowType.MODAL_DIALOG,
             Meta.WindowType.UTILITY, Meta.WindowType.TOOLBAR].includes(type);
         const parent = w.get_transient_for?.();
-        const ownerApp = app ?? (parent && this._tracker.get_window_app(parent)?.get_id());
-        const sidebarMode = !isPopup && s.get_boolean('sidebar-materials');
         const context = this._context();
         const focused = global.display.focus_window === w || global.display.focus_window === parent;
         const active = s.get_boolean('enabled') && !this._reduced() &&
             !Main.overview.visible && !Main.sessionMode.isLocked && eligible({
-                normal: type === Meta.WindowType.NORMAL || (isPopup && s.get_boolean('window-popups')) ||
-                    (isDialog && s.get_boolean('window-dialogs')),
+                normal: type === Meta.WindowType.NORMAL || isPopup || isDialog,
                 fullscreen: w.is_fullscreen(), minimized: w.minimized,
-                focused,
-                focusOnly: s.get_boolean('focused-only'),
-                app: ownerApp,
-                allApplications: s.get_boolean('all-applications'),
-                applications: s.get_strv('applications'),
             });
         if (!active) { this._clear(state); return; }
         if (!state.surface) {
@@ -199,21 +184,18 @@ export default class Prism extends Extension {
             if (!state.surface) return;
             state.opacity = state.surface.opacity;
         }
-        const roundedFrost = s.get_boolean('preserve-corners') && s.get_boolean('rounded-frost');
-        const quality = context.blurFocusedOnly && !focused ? 'off' : context.quality;
-        const mode = quality === 'off' ? 'none' : 'frost';
+        const blurAllowed = !context.blurFocusedOnly || focused;
+        const mode = blurAllowed ? 'frost' : 'none';
         if (state.layer && state.effectMode !== mode) { state.layer.destroy(); state.layer = null; state.effect = null; }
-        if (isPopup || (s.get_boolean('preserve-corners') && !roundedFrost)) {
+        if (isPopup) {
             // Popup frost is attached to the client surface below; never put
             // a second frame-sized plate behind native arrows and margins.
-            // Meta.WindowActor doesn't expose the client's alpha silhouette.
-            // Keep native client corners instead of inserting a square backdrop.
             state.layer?.destroy();
             state.layer = null;
             state.effect = null;
         } else {
             if (!state.layer) {
-                state.layer = new VisualBackdrop({reactive: false, can_focus: false, track_hover: false, clip_to_allocation: roundedFrost});
+                state.layer = new VisualBackdrop({reactive: false, can_focus: false, track_hover: false, clip_to_allocation: true});
                 state.effect = mode === 'none' ? null : new FrostEffect();
                 state.effectMode = mode;
                 state.layerStyle = null;
@@ -226,34 +208,26 @@ export default class Prism extends Extension {
             state.layer.set_position(frame.x - buffer.x, frame.y - buffer.y);
             state.layer.set_size(frame.width, frame.height);
             const dark = this._dark();
-            const radius = Math.max(0, Math.min(48, s.get_int('window-radius')));
+            const radius = 12;
             if (state.effect) {
-                state.effect.radii = roundedFrost ? [radius, radius, radius, radius] : [0, 0, 0, 0];
-                state.effect.quality = quality;
-                state.effect.freezeBackdrop = context.cachedBackdrop;
-                state.effect.maxFps = context.backdropFps;
+                state.effect.radii = [radius, radius, radius, radius];
             }
-            const style = materialStyle(s.get_string('preset'), dark, {
-                focused, emphasis: s.get_boolean('focus-emphasis') && !isPopup && !isDialog,
-                edges: s.get_boolean('glass-edges'),
-                transitions: s.get_boolean('gentle-transitions') && context.animations !== false && !context.lowPower,
-            }) + (roundedFrost ? ` border-radius: ${radius}px;` : '');
+            const style = materialStyle(dark, {focused, emphasis: !isDialog}) + ` border-radius: ${radius}px;`;
             if (state.layerStyle !== style) { state.layer.set_style(style); state.layerStyle = style; }
             if (state.effect) {
-                state.effect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
+                state.effect.radius = 36;
                 state.effect.brightness = dark ? 0.85 : 1.0;
                 state.effect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
-                    Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
+                    context.detail / 100];
             }
             const paintKey = JSON.stringify([style, state.effect?.radius,
-                state.effect?.brightness, state.effect?.radii, state.effect?.veil, quality, state.effect?.maxFps, context.cachedBackdrop]);
+                state.effect?.brightness, state.effect?.radii, state.effect?.veil]);
             if (state.paintKey !== paintKey) {
                 state.paintKey = paintKey;
                 state.layer.queue_redraw?.();
             }
         }
-        const popupFrost = isPopup && quality !== 'off' &&
-            (!s.get_boolean('preserve-corners') || roundedFrost);
+        const popupFrost = isPopup && blurAllowed;
         if (state.popupEffect && !popupFrost) {
             state.surface.remove_effect(state.popupEffect);
             state.popupEffect = null;
@@ -266,23 +240,20 @@ export default class Prism extends Extension {
                 state.surface.add_effect(state.popupEffect);
             }
             const dark = this._dark();
-            state.popupEffect.quality = quality;
-            state.popupEffect.freezeBackdrop = context.cachedBackdrop;
-            state.popupEffect.maxFps = context.backdropFps;
-            state.popupEffect.radius = Math.max(0, Math.min(80, s.get_int('blur-radius')));
-            state.popupEffect.clientTintOpacity = Math.max(75, Math.min(100, s.get_int('popup-opacity'))) / 100;
+            state.popupEffect.radius = 36;
+            state.popupEffect.clientTintOpacity = context.popupOpacity / 100;
             state.popupEffect.brightness = dark ? 0.85 : 1;
             state.popupEffect.veil = [...(dark ? [0.10, 0.11, 0.14] : [0.94, 0.95, 0.97]),
-                Math.max(0, Math.min(80, s.get_int('background-detail') ?? 25)) / 100];
-            const key = JSON.stringify([quality, state.popupEffect.radius,
-                state.popupEffect.brightness, state.popupEffect.veil, state.popupEffect.clientTintOpacity, state.popupEffect.maxFps, context.cachedBackdrop]);
+                context.detail / 100];
+            const key = JSON.stringify([state.popupEffect.radius,
+                state.popupEffect.brightness, state.popupEffect.veil, state.popupEffect.clientTintOpacity]);
             if (key !== state.popupPaintKey) {
                 state.popupPaintKey = key;
                 state.surface.queue_redraw?.();
             }
         }
         const hasFrost = Boolean(state.effect || state.popupEffect);
-        if (context.cachedBackdrop && state.cachedFocus !== focused) {
+        if (state.cachedFocus !== focused) {
             state.effect?.invalidateBackdrop?.();
             state.popupEffect?.invalidateBackdrop?.();
         }
@@ -298,14 +269,12 @@ export default class Prism extends Extension {
             state.refreshEffect = null;
         }
         this._redrawGuard?.track(state.layer ?? state.surface, hasFrost);
-        let opacity = Math.max(75, Math.min(100, s.get_int(isPopup ? 'popup-opacity' : 'translucency')));
-        if (s.get_boolean('material-hierarchy') && isDialog) opacity = Math.max(96, opacity);
+        let opacity = isPopup ? context.popupOpacity : context.windowOpacity;
+        if (isDialog) opacity = Math.max(96, opacity);
         // Native popup frost composites the translucent fill against the blur.
         // Fading the entire client afterwards leaks sharp background text back
         // through it. In this mode opacity controls the native fill in GLSL.
-        state.surface.opacity = popupFrost ? state.opacity : !sidebarMode && (isPopup || s.get_boolean('force-translucency'))
-            ? Math.round(state.opacity * opacity / 100)
-            : state.opacity;
+        state.surface.opacity = popupFrost ? state.opacity : Math.round(state.opacity * opacity / 100);
     }
 
     _clear(state) {
@@ -326,7 +295,6 @@ export default class Prism extends Extension {
 
     disable() {
         FrostEffect.setWorkspaceMotion(false);
-        FrostEffect.cancelPendingRefresh();
         this._experience?.destroy();
         this._experience = null;
         this._syncGtkMenus(true);
@@ -349,7 +317,6 @@ export default class Prism extends Extension {
         this._button = null;
         this._settings = null;
         this._interface = null;
-        this._tracker = null;
         this._windows = null;
         this._connections = null;
     }

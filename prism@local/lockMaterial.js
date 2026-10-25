@@ -4,11 +4,9 @@ import St from 'gi://St';
 // Reuse GNOME's wallpaper actors and their existing native blur. Never capture
 // session windows or modify authentication, focus, gestures, or entry opacity.
 export class LockMaterial {
-    constructor(shield, settings, permitted, context) {
+    constructor(shield, permitted) {
         this._shield = shield;
-        this._settings = settings;
         this._permitted = permitted;
-        this._context = context;
         this._effects = new Map();
         this._dialogSignals = [];
         this._theme = St.ThemeContext.get_for_stage(global.stage);
@@ -32,7 +30,7 @@ export class LockMaterial {
 
     refresh() {
         const dialog = this._shield?._dialog;
-        if (!this._permitted() || !this._settings.get_boolean('lock-material') ||
+        if (!this._permitted() ||
             !dialog?._backgroundGroup || !dialog?._promptBox) {
             this._clear();
             return;
@@ -51,9 +49,6 @@ export class LockMaterial {
         const base = this._style?.trim() ?? '';
         this._appliedStyle = `${base}${base && !base.endsWith(';') ? ';' : ''} background-color: rgba(25,28,35,0.70); border-radius: 28px; padding: 24px; border: 1px solid rgba(255,255,255,0.14);`;
         if (this._prompt.get_style() !== this._appliedStyle) this._prompt.set_style(this._appliedStyle);
-        const quality = this._context().quality ?? this._settings.get_string('render-quality');
-        const radius = Math.max(0, Math.min(quality === 'eco' ? 18 : quality === 'balanced' ? 32 : 56,
-            this._settings.get_int('blur-radius')));
         const prompting = this._prompt.visible;
         for (const actor of dialog._backgroundGroup.get_children()) {
             const effect = actor.get_effect('blur');
@@ -73,7 +68,7 @@ export class LockMaterial {
             // the latest native values so opt-out restores the correct scale.
             if (effect.radius !== saved.appliedRadius) saved.radius = effect.radius;
             if (effect.brightness !== saved.appliedBrightness) saved.brightness = effect.brightness;
-            saved.appliedRadius = prompting && quality !== 'off' ? radius * this._theme.scale_factor : 0;
+            saved.appliedRadius = prompting ? 18 * this._theme.scale_factor : 0;
             saved.appliedBrightness = prompting ? 0.78 : 1;
             if (effect.radius !== saved.appliedRadius) effect.radius = saved.appliedRadius;
             if (effect.brightness !== saved.appliedBrightness) effect.brightness = saved.appliedBrightness;

@@ -1,8 +1,4 @@
-export const PRESETS = Object.freeze({
-    clear: {name: 'Clear', radius: 18, tint: 0.06},
-    frosted: {name: 'Frosted', radius: 36, tint: 0.16},
-    soft: {name: 'Soft', radius: 56, tint: 0.28},
-});
+export const SOFT_TINT = 0.28;
 
 // One palette across compositor and GTK materials. Density and geometry remain
 // role-specific; overview/OSD/authentication use the dark palette for native
@@ -16,17 +12,16 @@ const PALETTES = Object.freeze({
 export const MATERIAL_STATES = Object.freeze({hover: 0.12, focus: 0.16, pressed: 0.22, disabled: 0.4});
 export function surfacePalette(dark) { return PALETTES[dark ? 'dark' : 'light']; }
 
-export function materialStyle(preset, dark, options = {}) {
-    const inactive = options.emphasis && !options.focused;
-    const tint = Math.min(0.6, (PRESETS[preset] ?? PRESETS.frosted).tint + (inactive ? 0.08 : 0));
+export function materialStyle(dark, {focused = true, emphasis = false} = {}) {
+    const inactive = emphasis && !focused;
+    const tint = SOFT_TINT + (inactive ? 0.08 : 0);
     const color = surfacePalette(dark).background;
-    const edge = options.edges ? (inactive ? 0.06 : dark ? 0.26 : 0.55) : 0;
-    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(255,255,255,${edge}); transition-duration: ${options.transitions ? 140 : 0}ms;`;
+    const edge = inactive ? 0.06 : dark ? 0.26 : 0.55;
+    return `background-color: rgba(${color}, ${tint}); border: 1px solid rgba(255,255,255,${edge});`;
 }
 
-export function eligible({normal, fullscreen, minimized, focused, focusOnly, app, applications, allApplications = false}) {
-    return normal && !fullscreen && !minimized && (!focusOnly || focused) &&
-        (allApplications || applications.includes(app));
+export function eligible({normal, fullscreen, minimized}) {
+    return normal && !fullscreen && !minimized;
 }
 
 export function shellSurfaceKind(classes) {

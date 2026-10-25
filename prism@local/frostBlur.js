@@ -1,10 +1,10 @@
 import Cogl from 'gi://Cogl';
-import {renderLevel} from './renderQuality.js';
+export const BLUR_BUDGET = Object.freeze({factor: 8, pixels: 65536, taps: 5});
 
 // Blur only a bounded, reduced-resolution image. Full-resolution compositing
 // stays a single sample, so adding a 4K window doesn't multiply blur work by 16.
-export function blurSize(width, height, quality = 'eco', radius = 0) {
-    const level = renderLevel(quality);
+export function blurSize(width, height, radius = 0) {
+    const level = BLUR_BUDGET;
     let factor = level.factor;
     // Avoid skipping whole texels between Gaussian taps: regular text rows
     // otherwise survive as bands or repeated ghost copies.
@@ -23,22 +23,16 @@ cogl_color_out = 0.25 * (
     texture2D(cogl_sampler0, uv + prismStep * vec2( 1.0,  1.0)));
 `;
 // Precomputed Gaussian weights; no per-pixel trigonometry or exponentials.
-const weights = [0.028532, 0.067234, 0.124009, 0.179044, 0.202362,
-    0.179044, 0.124009, 0.067234, 0.028532];
-export const BLUR_CODE = 'cogl_color_out = ' + weights.map((w, i) =>
-    `${w.toFixed(6)} * texture2D(cogl_sampler0, cogl_tex_coord0_in.xy + prismStep * ${(i - 4).toFixed(1)})`).join(' +\n') + ';';
-
-export const ECO_BLUR_CODE = 'cogl_color_out = ' + [0.06136, 0.24477, 0.38774, 0.24477, 0.06136].map((w, i) =>
+export const BLUR_CODE = 'cogl_color_out = ' + [0.06136, 0.24477, 0.38774, 0.24477, 0.06136].map((w, i) =>
     `${w.toFixed(6)} * texture2D(cogl_sampler0, cogl_tex_coord0_in.xy + prismStep * ${(i - 2).toFixed(1)})`).join(' +\n') + ';';
 
 export class BlurBuffer {
-    constructor(context, quality = 'eco') {
-        this._quality = quality;
-        this._level = renderLevel(quality);
+    constructor(context) {
+        this._level = BLUR_BUDGET;
         this._context = context;
         this._targets = [];
         this._downsample = this._pipeline(DOWNSAMPLE_CODE);
-        this._blur = this._pipeline(this._level.taps === 5 ? ECO_BLUR_CODE : BLUR_CODE);
+        this._blur = this._pipeline(BLUR_CODE);
     }
 
     _pipeline(code) {
@@ -73,7 +67,7 @@ export class BlurBuffer {
 
     render(texture, radius) {
         const width = texture.get_width(), height = texture.get_height();
-        const size = blurSize(width, height, this._quality, radius);
+        const size = blurSize(width, height, radius);
         let small, index = 0;
         for (let factor = 2; factor <= size.factor; factor *= 2) {
             small = this._target(index++, Math.max(1, Math.ceil(width / factor)), Math.max(1, Math.ceil(height / factor)));

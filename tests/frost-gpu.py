@@ -3,10 +3,9 @@ import ctypes as C
 import json
 import os
 import statistics
-import sys
 import math
-quality = sys.argv[1] if len(sys.argv) > 1 else 'balanced'
-factor, taps = {'eco': (8,5), 'balanced': (4,9), 'high': (2,9)}[quality]
+quality = 'cached'
+factor, taps = 8, 5
 small_size = 64 // factor
 mid_size = small_size * 2
 os.environ.setdefault('LIBGL_ALWAYS_SOFTWARE', '1')
@@ -82,7 +81,7 @@ def filter_program(code):
  bind(G,'glLinkProgram',None,U)(result)
  ok=I();bind(G,'glGetProgramiv',None,U,U,C.POINTER(I))(result,0x8B82,C.byref(ok));assert ok.value
  return result
-filters=[filter_program(snippet['downsample']),filter_program(snippet['ecoBlur'] if quality == 'eco' else snippet['blur'])]
+filters=[filter_program(snippet['downsample']),filter_program(snippet['blur'])]
 targets={}
 def target(index,size):
  if (index,size) in targets: return targets[index,size]
@@ -168,6 +167,53 @@ native_fill=render(24)
 assert native_fill[(32*64+32)*4+3]==255, 'Translucent popup fill composites against blurred backdrop without leaking sharp text'
 set4(loc(program,b'sourceColor'),1,(F*4)(1,1,1,1))
 assert render(24)[(32*64+32)*4:(32*64+32)*4+4]==[255,255,255,255], 'Popup opacity keeps opaque labels and icons sharp'
+# The expanded Custom range must also pass through the shader's old 75% floor.
+bindTexture(0x0DE1,texture)
+black=(C.c_ubyte*(64*64*4))(*([0,0,0,255]*(64*64)))
+bind(G,'glTexImage2D',None,U,I,I,I,I,I,U,U,P)(0x0DE1,0,0x1908,64,64,0,0x1908,0x1401,black)
+set4(loc(program,b'prismVeil'),1,(F*4)(0,0,0,0))
+set4(loc(program,b'sourceColor'),1,(F*4)(0.4,0.4,0.4,0.85))
+uniform1(loc(program,b'prismNativeTintOpacity'),0.70)
+lower_fill=render(24)[(32*64+32)*4]
+uniform1(loc(program,b'prismNativeTintOpacity'),0.75)
+upper_fill=render(24)[(32*64+32)*4]
+assert upper_fill-lower_fill>=3, 'Custom popup translucency must not be silently clamped at 75%'
+# Test the full normal-window composition, not just the backdrop shader. An
+# opaque app faded over the material can hide nearly all of a correct blur.
+with open('/tmp/prism-profile-default.json') as stream:
+ profile=json.load(stream)
+enable=bind(G,'glEnable',None,U); disable=bind(G,'glDisable',None,U)
+blend=bind(G,'glBlendFunc',None,U,U)
+def app_backdrop_contrast(opacity,detail):
+ values=[]
+ for background in [0,255]:
+  use(program);bindTexture(0x0DE1,texture)
+  solid=(C.c_ubyte*(64*64*4))(*([background,background,background,255]*(64*64)))
+  bind(G,'glTexImage2D',None,U,I,I,I,I,I,U,U,P)(0x0DE1,0,0x1908,64,64,0,0x1908,0x1401,solid)
+  uniform1(loc(program,b'prismNativeShape'),0)
+  uniform1(loc(program,b'prismActive'),1)
+  uniform1(loc(program,b'prismBrightness'),0.85)
+  set4(loc(program,b'prismVeil'),1,(F*4)(0.1,0.11,0.14,detail))
+  tint=profile['tint']
+  set4(loc(program,b'sourceColor'),1,(F*4)(25/255*tint,28/255*tint,35/255*tint,tint))
+  render(36)
+  # The original opaque app client is composited over the frosted layer at
+  # the exact opacity selected by the real profile.
+  uniform1(loc(program,b'prismActive'),0)
+  set4(loc(program,b'sourceColor'),1,(F*4)(0.12*opacity,0.12*opacity,0.12*opacity,opacity))
+  enable(0x0BE2);blend(1,0x0303);draw(5,0,4);disable(0x0BE2)
+  pixels=(C.c_ubyte*(64*64*4))();read(0,0,64,64,0x1908,0x1401,pixels)
+  values.append(pixels[(32*64+32)*4])
+ return values[1]-values[0]
+old_contrast=app_backdrop_contrast(0.92,0.35)
+new_contrast=app_backdrop_contrast(profile['opacity'],profile['detail'])
+assert new_contrast>old_contrast*1.8 and new_contrast>=15, (old_contrast,new_contrast)
+print(f'{quality} opaque-app composite: backdrop contrast {old_contrast} -> {new_contrast} levels')
+contrasts={name:app_backdrop_contrast(values['opacity'],values['detail'])
+           for name,values in profile['profiles'].items()}
+order=['subtle','balanced','airy','mist','glass','crystal']
+assert all(contrasts[second]>contrasts[first] for first,second in zip(order,order[1:])), contrasts
+print(f'{quality} coordinated presets, backdrop contrast: {contrasts}')
 assert bind(G,'glGetError',U)()==0,'GL error'
 print(f'Actual {quality} GLSL pixel test passed: detail deviation {spread(sharp):.1f} -> {spread(frosted):.1f}; transparent corners, opaque center')
 bind(E,'eglMakeCurrent',U,P,P,P,P)(display,None,None,None)

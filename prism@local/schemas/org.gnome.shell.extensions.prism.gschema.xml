@@ -1,60 +1,17 @@
 <schemalist>
  <schema id="org.gnome.shell.extensions.prism" path="/org/gnome/shell/extensions/prism/">
   <key name="enabled" type="b"><default>true</default></key>
-  <key name="material-hierarchy" type="b"><default>true</default></key>
-  <key name="focus-emphasis" type="b"><default>true</default></key>
-  <key name="glass-edges" type="b"><default>true</default></key>
-  <key name="gentle-transitions" type="b"><default>true</default></key>
+  <key name="simple-profile-version" type="i"><default>0</default></key>
+  <key name="material-strength" type="i"><range min="0" max="100"/><default>50</default></key>
+  <key name="desktop-profile" type="s">
+   <default>'airy'</default>
+   <!-- macos is accepted only to migrate the legacy identifier to balanced. -->
+   <choices><choice value="subtle"/><choice value="balanced"/><choice value="airy"/><choice value="mist"/><choice value="glass"/><choice value="crystal"/><choice value="custom"/><choice value="macos"/></choices>
+   <summary>Coordinated desktop translucency</summary>
+   <description>Subtle, Balanced, Airy, Mist, Glass, and Crystal use the same cached rendering with different material densities. Airy is the default. Custom exposes the full strength range.</description>
+  </key>
   <key name="auto-comfort" type="b"><default>true</default></key>
-  <key name="wallpaper-panel" type="b"><default>true</default></key>
-  <key name="preset" type="s"><default>'frosted'</default></key>
   <key name="appearance" type="s"><default>'auto'</default></key>
-  <key name="render-quality" type="s">
-   <default>'eco'</default>
-   <choices><choice value="eco"/><choice value="balanced"/><choice value="high"/><choice value="cached"/><choice value="off"/></choices>
-   <summary>Rendering level</summary>
-   <description>Eco reduces blur texture size and samples. Cached reuses an Eco-blurred frozen backdrop until focus, geometry, or material changes. Off keeps translucency without backdrop capture or blur.</description>
-  </key>
-  <key name="blur-radius" type="i"><default>36</default></key>
-  <key name="background-detail" type="i"><range min="0" max="80"/><default>25</default></key>
-  <key name="backdrop-fps" type="i"><range min="0" max="60"/><default>30</default></key>
-  <key name="panel-blur" type="b"><default>true</default></key>
-  <key name="overview-material" type="b"><default>true</default></key>
-  <key name="lock-material" type="b"><default>true</default></key>
-  <key name="overview-blur" type="b"><default>true</default></key>
-  <key name="overview-opacity" type="i"><range min="0" max="100"/><default>35</default></key>
-  <key name="stable-redraws" type="b"><default>true</default></key>
-  <key name="smooth-workspaces" type="b"><default>true</default></key>
-  <key name="translucency" type="i"><default>92</default></key>
-  <key name="force-translucency" type="b"><default>false</default></key>
-  <key name="focused-only" type="b"><default>true</default></key>
   <key name="reduce-transparency" type="b"><default>false</default></key>
-  <key name="applications" type="as"><default>[]</default></key>
-  <key name="sidebar-materials" type="b"><default>true</default></key>
-  <key name="all-applications" type="b"><default>false</default></key>
-  <key name="window-popups" type="b"><default>false</default></key>
-  <key name="window-dialogs" type="b"><default>false</default></key>
-  <key name="shell-menus" type="b"><default>false</default></key>
-  <key name="shell-panel" type="b"><default>false</default></key>
-  <key name="shell-dock" type="b"><default>false</default></key>
-  <key name="shell-dialogs" type="b"><default>false</default></key>
-  <key name="shell-overlays" type="b">
-   <default>true</default>
-   <summary>Lightweight Shell overlays</summary>
-   <description>Dark translucent Alt+Tab switchers, volume and brightness indicators, and standard Shell tooltips. Uses tint only without extra blur or desktop capture.</description>
-  </key>
-  <key name="shell-opacity" type="i"><default>85</default></key>
-  <key name="panel-opacity" type="i">
-   <range min="0" max="100"/>
-   <default>25</default>
-   <summary>Top bar background opacity</summary>
-   <description>Opacity of the independent neutral top bar material. Does not change menus, dock, or dialogs.</description>
-  </key>
-  <key name="popup-opacity" type="i"><default>92</default></key>
-  <key name="shell-notifications" type="b"><default>false</default></key>
-  <key name="preserve-corners" type="b"><default>true</default></key>
-  <key name="gtk-menus" type="b"><default>false</default></key>
-  <key name="rounded-frost" type="b"><default>true</default></key>
-  <key name="window-radius" type="i"><default>12</default></key>
  </schema>
 </schemalist>

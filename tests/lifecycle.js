@@ -1,235 +1,140 @@
 import GLib from 'gi://GLib';
+import {memorySettings} from './settings.js';
+import {initializeProfile,materialValues} from '../prism@local/simpleProfile.js';
 import {clientSurfaceRoot} from '../prism@local/windowSurface.js';
-import {eligible, materialStyle} from '../prism@local/materials.js';
+import {eligible,materialStyle} from '../prism@local/materials.js';
 import {comfortPolicy} from '../prism@local/experience.js';
-const [, bytes] = GLib.file_get_contents('prism@local/extension.js');
-const source = new TextDecoder().decode(bytes).replace(/^import .*;\n/gm, '').replace('export default class Prism', 'class Prism');
-let destroyed = 0;
+function assert(value,message){if(!value)throw new Error(message);}
+const [,bytes]=GLib.file_get_contents('prism@local/extension.js');
+const source=new TextDecoder().decode(bytes).replace(/^import .*;\n/gm,'').replace('export default class Prism','class Prism');
 class Widget {
-    constructor(properties) { this.properties = properties; this.redraws = 0; }
-    add_effect(effect) { this.effect = effect; }
-    set_position(x, y) { this.position = [x, y]; }
-    set_size(w, h) { this.size = [w, h]; }
-    set_style(style) { this.style = style; }
-    queue_redraw() { this.redraws++; }
-    destroy() { destroyed++; }
+    constructor(properties){this.properties=properties;this.redraws=0;}
+    add_effect(effect){this.effect=effect;}
+    set_position(x,y){this.position=[x,y];} set_size(w,h){this.size=[w,h];}
+    set_style(style){this.style=style;} queue_redraw(){this.redraws++;}
+    destroy(){this.destroyed=true;}
 }
-let windowType = 0;
-const win = {get_window_type: () => windowType, is_fullscreen: () => false, minimized: false,
-    get_frame_rect: () => ({x: 15, y: 25, width: 500, height: 400}),
-    get_buffer_rect: () => ({x: 10, y: 20})};
-const values = {'enabled': true, 'reduce-transparency': false, 'focused-only': true,
-    'applications': ['test.desktop'], 'appearance': 'dark', 'preset': 'frosted',
-    'sidebar-materials': false, 'blur-radius': 36, 'force-translucency': true, 'translucency': 92};
-const settings = {};
-const motionStates = [];
 class MockFrost {
-    isFrost = true;
-    invalidateBackdrop() { this.invalidations = (this.invalidations ?? 0) + 1; }
-    static setWorkspaceMotion(active) { motionStates.push(active); }
+    invalidateBackdrop(){this.invalidations=(this.invalidations??0)+1;}
+    static setWorkspaceMotion(value){this.motion=value;}
 }
-const shellMain = {overview: {visible: false}, sessionMode: {isLocked: false},
-    wm: {_workspaceAnimation: {_switchData: null}}};
-for (const method of ['get_boolean', 'get_strv', 'get_int', 'get_string']) settings[method] = key => values[key];
-const Prism = new Function('Extension', 'Gio', 'Meta', 'Shell', 'St', 'Main', 'global', 'eligible', 'materialStyle', 'FrostEffect', 'GObject', 'clientSurfaceRoot', 'VisualBackdrop', 'BackdropRefreshEffect', 'gtkMenuCss', 'comfortPolicy',
-    source + '\nreturn Prism;')(
-    class {}, {}, {WindowType: {NORMAL: 0, MENU: 1, DROPDOWN_MENU: 2, POPUP_MENU: 3, TOOLTIP: 4, COMBO: 5, DIALOG: 6, MODAL_DIALOG: 7, UTILITY: 8, TOOLBAR: 9, DESKTOP: 10}}, {BlurMode: {BACKGROUND: 1}, BlurEffect: class {}}, {Widget},
-    shellMain, {display: {focus_window: win}}, eligible, materialStyle, MockFrost, {type_name_from_instance: actor => actor.constructor.$gtype}, clientSurfaceRoot, Widget, class {}, (dark, opacity) => `${dark}:${opacity}`, comfortPolicy);
-const extension = new Prism();
-extension._settings = settings;
-extension._tracker = {get_window_app: () => ({get_id: () => 'test.desktop'})};
-const surface = {opacity: 240, effects: [], constructor: {$gtype: 'MetaSurfaceContainerActorWayland'},
-    add_effect(effect) { this.effects.push(effect); },
-    remove_effect(effect) { this.effects = this.effects.filter(item => item !== effect); }};
-const decoration = {opacity: 255, constructor: {$gtype: 'OtherExtensionDecoration'}};
-const actor = {effects: [], get_children: () => [decoration, surface], insert_child_at_index: () => {},
-    add_effect(effect) { this.effects.push(effect); },
-    remove_effect(effect) { this.effects = this.effects.filter(item => item !== effect); }};
-const state = {window: win, layer: null};
-function assert(value, message) { if (!value) throw new Error(message); }
-extension._update(actor, state);
-assert(surface.opacity === 221 && decoration.opacity === 255, 'Actual compositor root selected even behind another decoration');
-assert(state.layer.position.join() === '5,5', 'Backdrop uses frame-buffer offsets');
-assert(state.layer.size.join() === '500,400', 'Backdrop excludes shadow extents');
-assert(actor.effects.length === 1, 'Window actor receives a culling guard while backdrop capture is active');
-assert(!state.layer.properties.reactive && !state.layer.properties.can_focus && !state.layer.properties.track_hover, 'Backdrop cannot receive clicks, keyboard focus, or hover');
-extension._update(actor, state);
-assert(surface.opacity === 221, 'Repeated updates must not accumulate fading');
-assert(state.layer.redraws === 1, 'Repeated window refresh does not invalidate unchanged frost');
-values['force-translucency'] = false;
-extension._update(actor, state);
-assert(surface.opacity === 240, 'Disabling forced translucency restores original alpha');
-values.enabled = false;
-extension._update(actor, state);
-assert(state.layer === null && surface.opacity === 240 && destroyed === 1, 'Suspending cleans up and restores');
-assert(actor.effects.length === 0, 'Suspending removes the window culling guard');
-extension._update(actor, state);
-assert(destroyed === 1, 'Repeated cleanup is idempotent');
-values.enabled = true;
-values['force-translucency'] = true;
-values['sidebar-materials'] = true;
-for (const app of ['arbitrary.app.desktop', 'another.app.desktop']) {
-    values.applications = [app];
-    extension._tracker = {get_window_app: () => ({get_id: () => app})};
-    extension._update(actor, state);
-    assert(surface.opacity === 240, `${app} must retain full foreground opacity in sidebar mode`);
-    extension._clear(state);
+const types={NORMAL:0,MENU:1,DROPDOWN_MENU:2,POPUP_MENU:3,TOOLTIP:4,COMBO:5,DIALOG:6,MODAL_DIALOG:7,UTILITY:8,TOOLBAR:9,DESKTOP:10};
+let windowType=0,fullscreen=false,minimized=false;
+const win={get_window_type:()=>windowType,is_fullscreen:()=>fullscreen,get minimized(){return minimized;},
+    get_frame_rect:()=>({x:15,y:25,width:500,height:400}),get_buffer_rect:()=>({x:10,y:20}),
+    get_transient_for:()=>null};
+const display={focus_window:win};
+const main={overview:{visible:false},sessionMode:{isLocked:false},wm:{_workspaceAnimation:{_switchData:null}}};
+const Prism=new Function('Extension','Gio','Meta','St','Main','global','eligible','materialStyle','FrostEffect',
+    'GObject','clientSurfaceRoot','VisualBackdrop','BackdropRefreshEffect','gtkMenuCss','comfortPolicy','materialValues',
+    source+'\nreturn Prism;')(class{},{},{WindowType:types},{},main,{display},eligible,materialStyle,MockFrost,
+    {type_name_from_instance:actor=>actor.constructor.$gtype},clientSurfaceRoot,Widget,class{},(dark,alpha)=>dark+':'+alpha,comfortPolicy,materialValues);
+const extension=new Prism();extension._settings=memorySettings();initializeProfile(extension._settings);
+extension._interface={get_string:()=> 'prefer-dark'};
+const surface={opacity:240,effects:[],constructor:{$gtype:'MetaSurfaceContainerActorWayland'},
+    add_effect(effect){this.effects.push(effect);},remove_effect(effect){this.effects=this.effects.filter(item=>item!==effect);}};
+const decoration={opacity:255,constructor:{$gtype:'OtherExtensionDecoration'}};
+const actor={effects:[],get_children:()=>[decoration,surface],insert_child_at_index(){},
+    add_effect(effect){this.effects.push(effect);},remove_effect(effect){this.effects=this.effects.filter(item=>item!==effect);}};
+const state={actor,window:win};
+extension._update(actor,state);
+assert(surface.opacity===190&&decoration.opacity===255,'Airy applies to the actual native client without app selection');
+assert(state.layer.position.join()==='5,5'&&state.layer.size.join()==='500,400','Frame/buffer/shadow bounds remain correct');
+assert(state.effect.radii.join()==='12,12,12,12'&&state.effect.veil[3]===0.14,'Native-corner-safe backdrop and density are retained');
+assert(!state.layer.properties.reactive&&!state.layer.properties.can_focus&&!state.layer.properties.track_hover,'Decorative material cannot intercept input');
+assert(actor.effects.length===1&&state.effect.invalidations===1,'First capture has redraw/culling protection and explicit invalidation');
+extension._update(actor,state);
+assert(surface.opacity===190&&state.effect.invalidations===1&&state.layer.redraws===1,'Repeated refresh neither fades cumulatively nor recaptures a snapshot');
+extension._settings.set_boolean('enabled',false);extension._update(actor,state);
+assert(state.layer===null&&surface.opacity===240&&actor.effects.length===0,'Master off restores opacity and removes all effects');
+extension._settings.set_boolean('enabled',true);
+for(const excluded of ['fullscreen','minimized','desktop','overview','lock']){
+    fullscreen=excluded==='fullscreen';minimized=excluded==='minimized';windowType=excluded==='desktop'?10:0;
+    main.overview.visible=excluded==='overview';main.sessionMode.isLocked=excluded==='lock';
+    extension._update(actor,state);assert(!state.layer&&surface.opacity===240,'Exclusion remains: '+excluded);
 }
-values.applications = ['another.app.desktop'];
-values['sidebar-materials'] = false;
-extension._update(actor, state);
-assert(surface.opacity === 221, 'Whole-window mode remains available when sidebar-only mode is off');
+fullscreen=false;minimized=false;windowType=0;main.overview.visible=false;main.sessionMode.isLocked=false;
+extension._experience={state:{highContrast:true}};
+extension._update(actor,state);assert(!state.layer,'System high contrast retains native UI');
+extension._experience.state={onBattery:true,powerSaver:false};
+const background={actor,window:{...win}};
+extension._update(actor,background);
+assert(background.effect&&surface.opacity===190,'Battery retains cached material on background windows');
+extension._clear(background);
+extension._experience.state.powerSaver=true;
+extension._update(actor,background);
+assert(background.layer&&!background.effect&&surface.opacity===190&&actor.effects.length===0,'Power Saver retains background tint without capture/culling guard');
+extension._clear(background);
+extension._update(actor,state);assert(state.effect,'Focused window retains frost in Power Saver');extension._clear(state);
+extension._experience.state={};
+windowType=6;extension._update(actor,state);
+assert(state.effect&&surface.opacity===230,'Dialogs remain enabled with stronger native-content opacity');extension._clear(state);
+windowType=3;extension._update(actor,state);
+assert(!state.layer&&state.popupEffect.nativeShape&&surface.opacity===240&&state.popupEffect.clientTintOpacity===0.88,
+    'Separate app popups preserve their native silhouette and opaque text');extension._clear(state);
+windowType=0;extension._settings.set_int('material-strength',0);extension._update(actor,state);
+assert(surface.opacity===132,'Expanded Custom range reaches real client opacity without legacy clamps');extension._clear(state);
+extension._settings.set_int('material-strength',50);
+let writes=0;extension._gtkMenus={apply:()=>writes++};extension._syncGtkMenus();extension._syncGtkMenus();
+assert(writes===1,'Unchanged GTK material performs no repeated stylesheet IO');
+extension._settings.set_int('material-strength',0);extension._syncGtkMenus();
+assert(writes===2,'Derived density changes update matching GTK menus');
+extension._syncGtkMenus(true);assert(writes===3,'Disable removes owned GTK styles');
+let suspended=false,paused=false,shellScans=0;
+extension._redrawGuard={setSuspended:value=>suspended=value,track(){},untrack(){}};
+extension._shellSurfaces={refresh:()=>shellScans++,setMotionPaused:value=>paused=value};
+extension._windows=new Map();extension._refresh(false);assert(shellScans===0,'Focus refresh avoids scanning the Shell tree');
+extension._settings.set_int('material-strength',50);extension._update(actor,state);extension._windows.set(actor,state);
+const layer=state.layer;
+main.wm._workspaceAnimation._switchData={};extension._syncWorkspaceMotion();
+extension._settings.set_int('material-strength',0);extension._update(actor,state);
+assert(suspended&&paused&&state.layer===layer&&surface.opacity===190,'Workspace motion freezes materials and suspends broad redraw protection');
+main.wm._workspaceAnimation._switchData=null;extension._syncWorkspaceMotion();extension._refresh();
+assert(!suspended&&!paused&&state.layer===layer&&surface.opacity===132,'Motion completion applies deferred density without rebuilding the backdrop');
 extension._clear(state);
-values['all-applications'] = true;
-values.applications = [];
-extension._update(actor, state);
-assert(state.layer !== null, 'All-app scope does not require app selection');
-extension._clear(state);
-windowType = 6;
-extension._update(actor, state);
-assert(state.layer === null, 'Dialogs excluded until requested');
-values['window-dialogs'] = true;
-extension._update(actor, state);
-assert(state.layer !== null, 'Dialog category can be enabled');
-extension._clear(state);
-windowType = 3;
-values['sidebar-materials'] = true;
-values['popup-opacity'] = 80;
-extension._update(actor, state);
-assert(state.layer === null, 'Popups excluded until requested');
-values['window-popups'] = true;
-extension._update(actor, state);
-assert(state.layer === null && state.popupEffect.nativeShape && surface.effects.length === 1 && surface.opacity === 240,
-    'Popup frost attaches directly to the client with no second plate or final whole-client fade');
-assert(state.popupEffect.clientTintOpacity === 0.8 && actor.effects.length === 1,
-    'Popup opacity controls translucent fill and backdrop refresh protection remains active');
-values['render-quality'] = 'off';
-extension._update(actor, state);
-assert(!state.popupEffect && surface.effects.length === 0 && actor.effects.length === 0 && surface.opacity === 192,
-    'Translucency-only removes native popup frost and restores whole-popup opacity behavior');
-values['render-quality'] = 'eco';
-extension._update(actor, state);
-assert(surface.effects.length === 1 && surface.opacity === 240, 'Popup frost can be restored without accumulating effects or opacity');
-extension._clear(state);
-assert(surface.effects.length === 0 && actor.effects.length === 0, 'Popup cleanup removes the client renderer and refresh guard');
-windowType = 10;
-extension._update(actor, state);
-assert(state.layer === null, 'Desktop never admitted by broad scope');
-windowType = 0;
-values['sidebar-materials'] = false;
-values['preserve-corners'] = true;
-extension._update(actor, state);
-assert(state.layer === null && state.surface === surface && surface.opacity === 221, 'Native window corners remain unbacked while translucency stays active');
-extension._clear(state);
-assert(surface.opacity === 240 && state.surface === null, 'Corner-safe mode restores alpha even without a backdrop layer');
-values['preserve-corners'] = false;
-extension._update(actor, state);
-assert(state.layer !== null, 'Explicit legacy mode can create backdrop blur');
-values['preserve-corners'] = true;
-extension._update(actor, state);
-assert(state.layer === null && surface.opacity === 221, 'Enabling corner safety removes existing square backdrops immediately');
-extension._clear(state);
-values['rounded-frost'] = true;
-values['window-radius'] = 14;
-extension._update(actor, state);
-assert(state.layer !== null && state.effect.isFrost && state.effect.radii[0] === 14, 'Corner-safe app backdrops use configurable rounded frost');
-extension._clear(state);
-values['render-quality'] = 'off';
-extension._update(actor, state);
-assert(state.layer !== null && state.effect === null && surface.opacity === 221, 'Translucency-only keeps tint and opacity with no GPU capture effect');
-assert(actor.effects.length === 0, 'Translucency-only does not disable compositor culling');
-values['render-quality'] = 'eco';
-extension._update(actor, state);
-assert(state.effect.quality === 'eco', 'Switching from no blur to Eco creates the bounded renderer');
-values['render-quality'] = 'high';
-extension._update(actor, state);
-assert(state.effect.quality === 'high', 'App rendering level changes without reload');
-extension._clear(state);
-let writes = 0;
-values['auto-comfort'] = true;
-values['gentle-transitions'] = true;
-extension._experience = {state: {highContrast: true, lowPower: false, animations: true}};
-extension._update(actor, state);
-assert(state.layer === null && surface.opacity === 240, 'System high contrast suspends window effects and restores original opacity');
-extension._experience.state = {highContrast: false, onBattery: true, powerSaver: false, animations: false};
-values['render-quality'] = 'high';
-extension._update(actor, state);
-assert(state.effect.quality === 'eco' && state.layer.style.includes('transition-duration: 0ms'), 'Battery mode selects Eco and disables tint transitions');
-assert(state.effect.maxFps === 20, 'Battery mode caps focused-window capture refresh at 20 fps');
-assert(values['render-quality'] === 'high', 'Automatic comfort does not rewrite the saved quality setting');
-extension._clear(state);
-values['focused-only'] = false;
-const backgroundState = {window: {...win}, layer: null};
-extension._update(actor, backgroundState);
-assert(backgroundState.effect?.quality === 'eco' && backgroundState.effect.maxFps === 20 && surface.opacity === 221,
-    'Battery mode retains background-window translucency and bounded Eco blur with all-window scope');
-extension._clear(backgroundState);
-extension._experience.state.powerSaver = true;
-extension._update(actor, backgroundState);
-assert(backgroundState.layer !== null && !backgroundState.effect && surface.opacity === 221 && actor.effects.length === 0,
-    'Power Saver keeps background-window tint and opacity without backdrop capture or a culling guard');
-extension._clear(backgroundState);
-extension._update(actor, state);
-assert(state.effect?.quality === 'eco' && state.effect.maxFps === 12,
-    'Power Saver retains focused-window blur at up to 12 fps');
-extension._clear(state);
-values['focused-only'] = true;
-extension._update(actor, backgroundState);
-assert(backgroundState.layer === null && surface.opacity === 240, 'Explicit focused-only preference remains authoritative');
-values['focused-only'] = false;
-extension._experience.state = {highContrast: false, onBattery: false, powerSaver: false, animations: true};
-extension._update(actor, backgroundState);
-assert(backgroundState.effect?.quality === 'high' && backgroundState.effect.maxFps === 30 && surface.opacity === 221,
-    'Leaving battery/Power Saver restores saved quality and refresh rate without losing translucency');
-extension._clear(backgroundState);
-values['auto-comfort'] = false;
-assert(extension._context().quality === 'high', 'Automatic comfort can be disabled independently');
-values['gtk-menus'] = true;
-extension._gtkMenus = {apply: () => writes++};
-extension._syncGtkMenus();
-extension._syncGtkMenus();
-assert(writes === 1, 'Unchanged generated CSS avoids synchronous file access');
-values['shell-opacity'] = 80;
-extension._syncGtkMenus();
-assert(writes === 2, 'Palette/opacity changes still update GTK menus');
-extension._syncGtkMenus(true);
-assert(writes === 3, 'Disable always removes managed GTK styles');
-let cssSyncs = 0, shellRefreshes = 0;
-extension._syncGtkMenus = () => cssSyncs++;
-extension._shellSurfaces = {refresh: () => shellRefreshes++};
-extension._windows = new Map();
-extension._refresh(false);
-assert(cssSyncs === 0 && shellRefreshes === 0, 'Focus refresh does no stylesheet IO or Shell tree scan');
-values['smooth-workspaces'] = true;
-let redrawSuspended = false, nativePaused = false;
-extension._redrawGuard = {setSuspended: value => { redrawSuspended = value; }, setEnabled() {}, track() {}, untrack() {}};
-extension._shellSurfaces.setMotionPaused = value => { nativePaused = value; };
-extension._windows.set(actor, state);
-extension._update(actor, state);
-const workspaceLayer = state.layer, workspaceStyle = state.layer.style;
-shellMain.wm._workspaceAnimation._switchData = {};
-assert(extension._syncWorkspaceMotion() && redrawSuspended && nativePaused, 'Keyboard/gesture animation lifecycle suspends live blur and full-redraw protection');
-values.preset = 'soft';
-extension._update(actor, state);
-assert(state.layer === workspaceLayer && state.layer.style === workspaceStyle, 'Notifications during workspace motion do not rebuild or restyle source window materials');
-shellMain.wm._workspaceAnimation._switchData = null;
-extension._syncWorkspaceMotion();
-extension._refresh();
-assert(!redrawSuspended && !nativePaused && state.layer === workspaceLayer && state.layer.style !== workspaceStyle,
-    'Workspace completion/cancellation restores live appearance and applies deferred settings');
-assert(motionStates.join() === 'true,false' && values['render-quality'] === 'high', 'Workspace optimization changes no saved rendering quality');
-shellMain.wm._workspaceAnimation._switchData = {};
-values['smooth-workspaces'] = false;
-assert(!extension._syncWorkspaceMotion(), 'Workspace optimization can be disabled');
-extension._clear(state);
-values['render-quality'] = 'cached';
-extension._update(actor, state);
-assert(state.effect.quality === 'eco' && state.effect.freezeBackdrop && state.effect.invalidations === 1,
-    'Cached quality selects Eco frozen capture and refreshes when the window gains focus');
-extension._update(actor, state);
-assert(state.effect.invalidations === 1, 'Repeated updates do not invalidate a stationary focused snapshot');
-values['render-quality'] = 'high';
-extension._update(actor, state);
-assert(!state.effect.freezeBackdrop && state.effect.quality === 'high', 'Switching back restores live rendering');
-extension._clear(state);
-print('Lifecycle and focus hot-path checks passed');
+assert(surface.opacity===240&&surface.effects.length===0&&actor.effects.length===0,'Final cleanup releases popup and window effects');
+print('Unified window/popup lifecycle, cached focus, Power Saver, density, GTK IO and workspace checks passed');
+
+// Exercise enable/disable wiring too: constructor argument changes must not
+// silently pass a Settings object where the new surface permission callback goes.
+class Events {
+    constructor(){this.handlers=new Map();this.next=0;}
+    connect(name,callback){this.handlers.set(++this.next,[name,callback]);return this.next;}
+    disconnect(id){this.handlers.delete(id);}queue_redraw(){}
+}
+const stage=new Events(),wm=new Events(),bootDisplay=new Events(),overview=new Events(),session=new Events();
+overview.visible=false;session.isLocked=false;
+const iface=new Events();iface.get_string=()=> 'prefer-dark';
+let gtkRemoved=false,buttonDestroyed=false;
+class Button {
+    constructor(){this.menu={addMenuItem(){},addAction(){},close(){}};}
+    add_child(){}destroy(){buttonDestroyed=true;}
+}
+class Switch {connect(){return 1;}setToggleState(){}}
+class Lifetime {destroy(){this.destroyed=true;}refresh(){}setMotionPaused(){}}
+class Surfaces extends Lifetime {
+    constructor(root,panel,isDark,permitted,guard,context){super();
+        assert(typeof isDark==='function'&&typeof permitted==='function'&&context().windowOpacity===79,
+            'Shell manager receives the derived context and new constructor arguments');}
+}
+class Overview extends Lifetime {
+    constructor(layout,permitted,context){super();assert(typeof permitted==='function'&&context().overviewOpacity===26,'Overview constructor wiring');}
+}
+class Lock extends Lifetime {
+    constructor(shield,permitted){super();assert(typeof permitted==='function','Lock constructor wiring');}
+}
+const bootMain={overview,sessionMode:session,wm:{_workspaceAnimation:{_switchData:null}},uiGroup:{},screenShield:{},
+    layoutManager:{},panel:{addToStatusArea(){}}};
+const Boot=new Function('Extension','Gio','St','Main','global','RedrawGuard','GtkMenuStyle','PanelMenu','PopupMenu',
+    'Experience','ShellSurfaces','OverviewMaterial','LockMaterial','initializeProfile','comfortPolicy','materialValues',
+    'FrostEffect','gtkMenuCss',source+'\nreturn Prism;')(
+    class{getSettings(){const s=memorySettings();initializeProfile(s);return s;}},
+    {Settings:class{constructor(){return iface;}}},{Icon:class{}},bootMain,
+    {display:bootDisplay,window_manager:wm,stage,get_window_actors:()=>[]},
+    class extends Lifetime{setSuspended(){}},class{apply(css){if(css===null)gtkRemoved=true;}},
+    {Button},{PopupSwitchMenuItem:Switch},class extends Lifetime{state={highContrast:false};},
+    Surfaces,Overview,Lock,initializeProfile,comfortPolicy,materialValues,MockFrost,(dark,alpha)=>dark+':'+alpha);
+const boot=new Boot();boot.enable();boot.disable();
+assert(buttonDestroyed&&gtkRemoved&&[stage,wm,bootDisplay,overview,session,iface].every(item=>item.handlers.size===0),
+    'A complete enable/disable releases signal wiring, status button and GTK material');
+print('Extension enable/disable and surface constructor wiring checks passed');

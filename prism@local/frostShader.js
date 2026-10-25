@@ -39,23 +39,10 @@ if (prismActive > 0.5) {
         float clientAlpha = cogl_color_out.a / max(prismOpacity, 0.001);
         float coverage = smoothstep(0.2, 0.75, clientAlpha);
         float translucent = 1.0 - smoothstep(0.96, 0.999, clientAlpha);
-        cogl_color_out *= mix(1.0, clamp(prismNativeTintOpacity, 0.75, 1.0), coverage * translucent);
+        cogl_color_out *= mix(1.0, clamp(prismNativeTintOpacity, 0.70, 1.0), coverage * translucent);
         cogl_color_out += vec4(blurred, 1.0) * max(0.0, prismOpacity - cogl_color_out.a) * coverage;
     } else {
         cogl_color_out = (cogl_color_out + vec4(blurred, 1.0) * max(0.0, prismOpacity - cogl_color_out.a)) * mask;
     }
 }
 `;
-
-export function backdropRect(x, y, width, height, layout, scale, framebufferWidth, framebufferHeight) {
-    const left = Math.floor((x - layout.x) * scale);
-    const top = Math.floor((y - layout.y) * scale);
-    const fullWidth = Math.max(1, Math.ceil(width * scale));
-    const fullHeight = Math.max(1, Math.ceil(height * scale));
-    const sourceX = Math.max(0, left), sourceY = Math.max(0, top);
-    const captureWidth = Math.min(framebufferWidth, left + fullWidth) - sourceX;
-    const captureHeight = Math.min(framebufferHeight, top + fullHeight) - sourceY;
-    if (captureWidth <= 0 || captureHeight <= 0) return null;
-    return {x: sourceX, y: sourceY, width: captureWidth, height: captureHeight,
-        fullWidth, fullHeight, offsetX: left - sourceX, offsetY: top - sourceY};
-}
